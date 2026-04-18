@@ -1,4 +1,4 @@
-const CACHE = "glouglou-v2";
+const CACHE = "glouglou-v3-net-first";
 const CORE = [
   "./",
   "index.html",
@@ -29,21 +29,19 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Network-first · always try fresh, fall back to cache only when offline.
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req)
-        .then((res) => {
-          if (res && res.status === 200 && res.type === "basic") {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res && res.status === 200 && res.type === "basic") {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });
