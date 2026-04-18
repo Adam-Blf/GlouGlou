@@ -1076,6 +1076,36 @@ button:focus-visible {
   letter-spacing: -0.5px;
 }
 
+/* ---------- Case editor ---------- */
+.case-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 24px;
+}
+.case-editor-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  border-left: 3px solid var(--cat, var(--line));
+}
+.case-editor-item:active { background: rgba(255,255,255,0.07); }
+.case-editor-item.is-custom { background: rgba(255,200,50,0.05); border-color: rgba(255,200,50,0.35); }
+.case-editor-num { font-family: var(--font-mono); font-size: 11px; opacity: 0.45; width: 22px; flex-shrink: 0; }
+.case-editor-icon { font-size: 22px; flex-shrink: 0; width: 28px; text-align: center; }
+.case-editor-info { flex: 1; min-width: 0; }
+.case-editor-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.case-editor-short { font-size: 11px; opacity: 0.5; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.case-editor-badge { margin-left: 6px; font-size: 11px; }
+
 /* ---------- Playing card ---------- */
 .playing-card {
   width: 100px;

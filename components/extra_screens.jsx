@@ -54,7 +54,7 @@ function RulesScreen({ onDone }) {
 }
 
 // ---------- Host setup ----------
-function HostSetupScreen({ onConfirm, onBack }) {
+function HostSetupScreen({ onConfirm, onBack, onEditCases }) {
   const [intensity, setIntensity] = useS2("normale");
   const [variant, setVariant] = useS2("classique");
   const [maxPlayers, setMaxPlayers] = useS2(10);
@@ -102,7 +102,12 @@ function HostSetupScreen({ onConfirm, onBack }) {
                style={{ width: "100%" }} />
       </div>
 
-      <div className="row" style={{ justifyContent: "center" }}>
+      <div className="col" style={{ alignItems: "center", gap: 10 }}>
+        {onEditCases && (
+          <button className="btn btn-ghost" style={{ width: "100%" }} onClick={onEditCases}>
+            ✏️ Personnaliser les cases
+          </button>
+        )}
         <button className="btn btn-primary" onClick={() => onConfirm({ intensity, variant, maxPlayers })}>
           Créer la partie →
         </button>
@@ -425,9 +430,137 @@ function CardDrawModal({ card, player, onClose }) {
   );
 }
 
+// ---------- Case editor ----------
+const CATS = ["drink","give","party","action","role","special","target","card"];
+const CAT_LABELS = { drink:"Boire", give:"Gorgées", party:"Tout le monde", action:"Action", role:"Rôle", special:"Spéciale", target:"Ciblée", card:"Carte" };
+
+function CaseEditorScreen({ customCases, onSave, onReset, onBack }) {
+  const [search, setSearch] = useS2("");
+  const [editing, setEditing] = useS2(null); // case number being edited
+  const [draft, setDraft] = useS2({});
+
+  const allCases = (window._CASES_ORIG || window.CASES).slice(1); // 1..65, skip n=0
+  const filtered = search
+    ? allCases.filter(c => c.title.toLowerCase().includes(search.toLowerCase()) || String(c.n).includes(search))
+    : allCases;
+
+  function startEdit(c) {
+    const orig = (window._CASES_ORIG || window.CASES)[c.n] || c;
+    const custom = customCases[c.n] || {};
+    setDraft({ title: custom.title ?? orig.title, icon: custom.icon ?? orig.icon, short: custom.short ?? orig.short, desc: custom.desc ?? orig.desc, cat: custom.cat ?? orig.cat });
+    setEditing(c.n);
+  }
+
+  function saveEdit() {
+    const orig = (window._CASES_ORIG || window.CASES)[editing];
+    const diff = {};
+    ['title','icon','short','desc','cat'].forEach(k => { if (draft[k] !== orig[k]) diff[k] = draft[k]; });
+    onSave(editing, Object.keys(diff).length ? diff : null);
+    setEditing(null);
+  }
+
+  const customCount = Object.keys(customCases).length;
+
+  return (
+    <div className="screen">
+      <div className="topbar">
+        <button className="btn btn-ghost" onClick={onBack}>← Retour</button>
+        <div className="pill">✏️ Cases personnalisées</div>
+      </div>
+
+      <div className="row" style={{ gap: 8, padding: "0 4px" }}>
+        <input
+          className="code-box"
+          placeholder="🔍 Rechercher…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: 1, height: 40, fontSize: 14, textTransform: "none", textAlign: "left", padding: "0 12px" }}
+        />
+        {customCount > 0 && (
+          <button className="btn btn-ghost" style={{ fontSize: 12, padding: "8px 12px", borderColor: "rgba(255,100,100,0.5)", color: "rgba(255,150,150,1)" }}
+            onClick={() => { if (window.confirm(`Réinitialiser les ${customCount} case(s) modifiée(s) ?`)) onReset(); }}>
+            Réinitialiser ({customCount})
+          </button>
+        )}
+      </div>
+
+      <div className="case-editor-list">
+        {filtered.map(origCase => {
+          const isCustom = !!customCases[origCase.n];
+          const c = isCustom ? { ...origCase, ...customCases[origCase.n] } : origCase;
+          return (
+            <div key={c.n} className={"case-editor-item c-" + c.cat + (isCustom ? " is-custom" : "")}
+              onClick={() => startEdit(origCase)}>
+              <div className="case-editor-num">{c.n}</div>
+              <div className="case-editor-icon">{c.icon}</div>
+              <div className="case-editor-info">
+                <div className="case-editor-title">{c.title}{isCustom && <span className="case-editor-badge">✏️</span>}</div>
+                <div className="case-editor-short">{c.short}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {editing !== null && (
+        <div className="backdrop" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div className="modal-cat">Case {editing}</div>
+              <div className="modal-title">Modifier la case</div>
+            </div>
+            <div className="modal-body col" style={{ gap: 14 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <div style={{ flex: "0 0 64px" }}>
+                  <div className="mono muted" style={{ fontSize: 10, marginBottom: 4 }}>Icône</div>
+                  <input className="code-box" value={draft.icon} onChange={e => setDraft(d => ({ ...d, icon: e.target.value }))}
+                    style={{ width: 56, height: 56, fontSize: 28, textAlign: "center" }} maxLength={4} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="mono muted" style={{ fontSize: 10, marginBottom: 4 }}>Titre</div>
+                  <input className="code-box" value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                    style={{ width: "100%", height: 40, fontSize: 15, textTransform: "none", textAlign: "left", padding: "0 10px" }} maxLength={32} />
+                </div>
+              </div>
+              <div>
+                <div className="mono muted" style={{ fontSize: 10, marginBottom: 4 }}>Résumé court</div>
+                <input className="code-box" value={draft.short} onChange={e => setDraft(d => ({ ...d, short: e.target.value }))}
+                  style={{ width: "100%", height: 40, fontSize: 13, textTransform: "none", textAlign: "left", padding: "0 10px" }} maxLength={50} />
+              </div>
+              <div>
+                <div className="mono muted" style={{ fontSize: 10, marginBottom: 4 }}>Description complète</div>
+                <textarea value={draft.desc} onChange={e => setDraft(d => ({ ...d, desc: e.target.value }))}
+                  rows={3} maxLength={200}
+                  style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1.5px solid var(--line-strong)", borderRadius: 10, color: "var(--paper)", fontSize: 13, padding: "10px 12px", resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <div className="mono muted" style={{ fontSize: 10, marginBottom: 6 }}>Catégorie</div>
+                <div className="tag-group" style={{ flexWrap: "wrap" }}>
+                  {CATS.map(k => (
+                    <button key={k} className={"tag" + (draft.cat === k ? " active" : "")} onClick={() => setDraft(d => ({ ...d, cat: k }))}>{CAT_LABELS[k]}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="modal-actions">
+              {customCases[editing] && (
+                <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { onSave(editing, null); setEditing(null); }}>
+                  Réinitialiser
+                </button>
+              )}
+              <button className="btn btn-ghost" onClick={() => setEditing(null)}>Annuler</button>
+              <button className="btn btn-primary" onClick={saveEdit}>Sauvegarder</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 Object.assign(window, {
   RulesScreen, HostSetupScreen, TurnIntro,
   CupidonModal, GiveSipsModal, ShotSplash,
   EndStatsScreen, PauseMenu, ActiveRolesBar,
-  HandoffScreen, CardDrawModal,
+  HandoffScreen, CardDrawModal, CaseEditorScreen,
 });

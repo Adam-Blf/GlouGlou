@@ -62,6 +62,10 @@ function saveSession(data) { try { localStorage.setItem(SESSION_KEY, JSON.string
 function loadSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (_) { return null; } }
 function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch (_) {} }
 
+const CUSTOM_CASES_KEY = "glouglou-custom-cases-v1";
+function loadCustomCases() { try { return JSON.parse(localStorage.getItem(CUSTOM_CASES_KEY) || "{}"); } catch (_) { return {}; } }
+function saveCustomCases(cc) { try { localStorage.setItem(CUSTOM_CASES_KEY, JSON.stringify(cc)); } catch (_) {} }
+
 function App() {
   // Multiplayer mode
   const [mpMode, setMpMode] = useState("off");        // "off" | "host" | "guest" | "local"
@@ -105,6 +109,7 @@ function App() {
   const [activeRoles, setActiveRoles] = useState([]);
   const [backwardPlayerIds, setBackwardPlayerIds] = useState([]);
   const [cardModal, setCardModal] = useState(null);
+  const [customCases, setCustomCases] = useState(() => loadCustomCases());
   const [showHandoff, setShowHandoff] = useState(false);
   const [localPlayerDraft, setLocalPlayerDraft] = useState(null); // non-null when adding a local player
 
@@ -114,7 +119,27 @@ function App() {
     return () => { window.__glouglouToast = null; };
   }, []);
 
+  useEffect(() => {
+    if (!window._CASES_ORIG) window._CASES_ORIG = window.CASES.slice();
+    window.CASES = window._CASES_ORIG.map((c) => c ? { ...c, ...(customCases[c.n] || {}) } : c);
+  }, [customCases]);
+
   function showToast(text) { setToast({ text, id: Date.now() }); }
+
+  function updateCustomCase(n, diff) {
+    setCustomCases((prev) => {
+      const next = { ...prev };
+      if (!diff) delete next[n];
+      else next[n] = { ...(prev[n] || {}), ...diff };
+      saveCustomCases(next);
+      return next;
+    });
+  }
+
+  function resetAllCustomCases() {
+    setCustomCases({});
+    saveCustomCases({});
+  }
 
   // ---- Multiplayer wiring -----------------------------------------
   const mp = window.useMultiplayer({
@@ -139,6 +164,7 @@ function App() {
       if (s.gameConfig !== undefined) setGameConfig(s.gameConfig);
       if (s.backwardPlayerIds !== undefined) setBackwardPlayerIds(s.backwardPlayerIds);
       if (s.cardModal !== undefined) setCardModal(s.cardModal);
+      if (s.customCases !== undefined) setCustomCases(s.customCases);
       // Update my own copy if host sent it back
       if (s.players) {
         const mine = s.players.find((p) => p.id === meIdRef.current);
@@ -168,8 +194,8 @@ function App() {
   const stateSnapshot = useMemo(() => ({
     phase, players, turnIdx, dice, rolling,
     activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash,
-    cupidLinks, activeRoles, history, winner, finishedPlayerIds, gameConfig, backwardPlayerIds, cardModal,
-  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, finishedPlayerIds, gameConfig, backwardPlayerIds, cardModal]);
+    cupidLinks, activeRoles, history, winner, finishedPlayerIds, gameConfig, backwardPlayerIds, cardModal, customCases,
+  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, finishedPlayerIds, gameConfig, backwardPlayerIds, cardModal, customCases]);
 
   useEffect(() => {
     if (mpMode !== "host") return;
@@ -594,7 +620,15 @@ function App() {
         <HomeScreen onCreate={createRoom} onCreateLocal={createLocalRoom} onJoin={joinRoom} onResume={resumeSession} savedSession={savedSession} />
       )}
       {screen === "hostSetup" && (
-        <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => { leaveRoom(); }} />
+        <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => { leaveRoom(); }}
+          onEditCases={() => setScreen("caseEditor")} />
+      )}
+      {screen === "caseEditor" && (
+        <CaseEditorScreen
+          customCases={customCases}
+          onSave={updateCustomCase}
+          onReset={resetAllCustomCases}
+          onBack={() => setScreen("hostSetup")} />
       )}
       {screen === "pickChar" && (
         <CharacterPickScreen me={localPlayerDraft || me} players={players}
