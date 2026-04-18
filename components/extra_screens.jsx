@@ -353,9 +353,59 @@ function HandoffScreen({ player, character, onReady }) {
   );
 }
 
+// ---------- Card draw modal ----------
+function CardDrawModal({ card, player, onClose }) {
+  const [flipped, setFlipped] = useS2(false);
+  const isRed = card.suit === '♥' || card.suit === '♦';
+
+  function getEffect() {
+    const v = card.value;
+    if (v === 'A') return "Shot cul sec ! 🥃";
+    if (v === 'K') return "Tu deviens Roi des questions jusqu'à la fin de la partie.";
+    if (v === 'Q') return "Tu deviens Reine des p***s jusqu'à la fin.";
+    if (v === 'J') return "Tu deviens Valet des pouces jusqu'à la fin.";
+    if (v === '10') return "Tournée générale ! Tout le monde boit 2 gorgées.";
+    if (v === '9') return "Bois 3 gorgées.";
+    if (v === '8') return "Défense ! Tu ne bois rien pendant ce tour.";
+    return `Bois ${v} gorgée${parseInt(v,10) > 1 ? 's' : ''}.`;
+  }
+
+  return (
+    <div className="backdrop">
+      <div className="modal" style={{ maxWidth: 360 }}>
+        <div className="modal-header" style={{ background: "linear-gradient(180deg, rgba(255,200,50,0.18), transparent)" }}>
+          <div className="icon-splash">🃏</div>
+          <div className="modal-cat">PIOCHE UNE CARTE</div>
+          <div className="modal-title">{player?.name}</div>
+        </div>
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+          {!flipped ? (
+            <div className="playing-card card-back" onClick={() => setFlipped(true)}>
+              <div style={{ fontSize: 44 }}>🎴</div>
+              <div className="mono" style={{ fontSize: 11, opacity: 0.5, marginTop: 6 }}>Tape pour révéler</div>
+            </div>
+          ) : (
+            <>
+              <div className="playing-card" style={{ color: isRed ? "#e63946" : "#111" }}>
+                <div className="card-corner card-corner-tl">{card.value}<br />{card.suit}</div>
+                <div className="card-suit-big">{card.suit}</div>
+                <div className="card-corner card-corner-br">{card.value}<br />{card.suit}</div>
+              </div>
+              <div style={{ textAlign: "center", fontSize: 16, fontWeight: 600, color: "var(--paper)" }}>{getEffect()}</div>
+            </>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-primary" disabled={!flipped} onClick={onClose}>Continuer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 Object.assign(window, {
   RulesScreen, HostSetupScreen, TurnIntro,
   CupidonModal, GiveSipsModal, ShotSplash,
   EndStatsScreen, PauseMenu, ActiveRolesBar,
-  HandoffScreen,
+  HandoffScreen, CardDrawModal,
 });

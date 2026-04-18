@@ -102,6 +102,8 @@ function App() {
   const [shotSplash, setShotSplash] = useState(null);
   const [cupidLinks, setCupidLinks] = useState([]);
   const [activeRoles, setActiveRoles] = useState([]);
+  const [backwardPlayerIds, setBackwardPlayerIds] = useState([]);
+  const [cardModal, setCardModal] = useState(null);
   const [showHandoff, setShowHandoff] = useState(false);
   const [localPlayerDraft, setLocalPlayerDraft] = useState(null); // non-null when adding a local player
 
@@ -133,6 +135,8 @@ function App() {
       if (s.history !== undefined) setHistory(s.history);
       if (s.winner !== undefined) setWinner(s.winner);
       if (s.gameConfig !== undefined) setGameConfig(s.gameConfig);
+      if (s.backwardPlayerIds !== undefined) setBackwardPlayerIds(s.backwardPlayerIds);
+      if (s.cardModal !== undefined) setCardModal(s.cardModal);
       // Update my own copy if host sent it back
       if (s.players) {
         const mine = s.players.find((p) => p.id === meIdRef.current);
@@ -162,8 +166,8 @@ function App() {
   const stateSnapshot = useMemo(() => ({
     phase, players, turnIdx, dice, rolling,
     activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash,
-    cupidLinks, activeRoles, history, winner, gameConfig,
-  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, gameConfig]);
+    cupidLinks, activeRoles, history, winner, gameConfig, backwardPlayerIds, cardModal,
+  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, gameConfig, backwardPlayerIds, cardModal]);
 
   useEffect(() => {
     if (mpMode !== "host") return;
@@ -215,6 +219,7 @@ function App() {
       case "closeModal":      closeModalAndNext(); break;
       case "pickCupidon":     onCupidChoose(args.partnerId); break;
       case "giveSips":        onGiveDone(args.dist); break;
+      case "closeCardModal": closeCardModal(); break;
       default: break;
     }
   }
@@ -310,6 +315,8 @@ function App() {
     setCupidLinks([]);
     setActiveRoles([]);
     setHistory({ sips: {} });
+    setBackwardPlayerIds([]);
+    setCardModal(null);
     setScreen("home");
   }
 
@@ -321,6 +328,8 @@ function App() {
     setCupidLinks([]);
     setActiveRoles([]);
     setHistory({ sips: {} });
+    setBackwardPlayerIds([]);
+    setCardModal(null);
     setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 })));
     setScreen("rules");
   }
@@ -352,22 +361,28 @@ function App() {
   function advancePlayer(playerId, steps) {
     const current = players.find((p) => p.id === playerId);
     if (!current) return;
-    const target = Math.min(60, current.position + steps);
+    const isBackward = backwardPlayerIds.includes(playerId);
+    if (isBackward) setBackwardPlayerIds((prev) => prev.filter((id) => id !== playerId));
+    const target = isBackward
+      ? Math.max(1, current.position - steps)
+      : Math.min(65, current.position + steps);
     let pos = current.position;
     const step = () => {
-      pos += 1;
+      pos = isBackward ? pos - 1 : pos + 1;
       movePlayer(playerId, pos);
-      if (pos < target) setTimeout(step, 140);
+      const done = isBackward ? pos <= target : pos >= target;
+      if (!done) setTimeout(step, 140);
       else setTimeout(() => triggerCase(playerId, target), 300);
     };
-    if (pos < target) setTimeout(step, 140);
+    const done = isBackward ? pos <= target : pos >= target;
+    if (!done) setTimeout(step, 140);
     else triggerCase(playerId, target);
   }
 
   function triggerCase(playerId, caseNum) {
     const c = window.CASES[caseNum];
     if (!c) return;
-    if (caseNum === 60) {
+    if (caseNum === 65) {
       window.SFX?.win();
       setWinner(players.find((p) => p.id === playerId));
       setConfetti(true);
@@ -378,13 +393,13 @@ function App() {
     if (caseNum === 2) {
       setPlayers((ps) => ps.map((p) => p.id === playerId ? { ...p, jokers: p.jokers + 1 } : p));
     }
-    if ([6, 21, 33, 45, 58].includes(caseNum)) {
+    if ([6, 21, 33, 45, 58, 60].includes(caseNum)) {
       window.SFX?.shot();
       setShotSplash({ label: caseNum === 58 ? "DOUBLE SHOT !" : "SHOT !" });
     } else if (caseNum === 13 || caseNum === 59) {
       window.SFX?.shot();
       setShotSplash({ label: "CUL SEC !" });
-    } else if (caseNum === 37) {
+    } else if (caseNum === 37 || caseNum === 55 || caseNum === 62) {
       window.SFX?.shot();
       setShotSplash({ label: "PINTE DU ROI" });
     } else {
@@ -393,11 +408,33 @@ function App() {
     if (caseNum === 24 || caseNum === 42) setActiveRoles((rs) => replaceOrAdd(rs, "Roi des questions", playerId));
     else if (caseNum === 25 || caseNum === 40) setActiveRoles((rs) => replaceOrAdd(rs, "Reine des p***s", playerId));
     else if (caseNum === 26 || caseNum === 41) setActiveRoles((rs) => replaceOrAdd(rs, "Valet des pouces", playerId));
+    if (caseNum === 61) setBackwardPlayerIds((prev) => [...prev, playerId]);
     setActiveCaseModal({ caseNum, playerId });
   }
 
   function addSips(playerId, n) {
     setHistory((h) => ({ ...h, sips: { ...h.sips, [playerId]: (h.sips[playerId] || 0) + n } }));
+  }
+
+  function drawCard() {
+    const values = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+    const suits = ['♠','♥','♦','♣'];
+    return { value: values[Math.floor(Math.random() * 13)], suit: suits[Math.floor(Math.random() * 4)] };
+  }
+
+  function closeCardModal() {
+    if (!cardModal) return;
+    const { playerId, card } = cardModal;
+    const v = card.value;
+    if (v === 'A') { window.SFX?.shot(); setShotSplash({ label: "SHOT !" }); }
+    else if (v === 'K') setActiveRoles((rs) => replaceOrAdd(rs, "Roi des questions", playerId));
+    else if (v === 'Q') setActiveRoles((rs) => replaceOrAdd(rs, "Reine des p***s", playerId));
+    else if (v === 'J') setActiveRoles((rs) => replaceOrAdd(rs, "Valet des pouces", playerId));
+    else if (v === '10') players.forEach((p) => addSips(p.id, 2));
+    else if (v === '9') addSips(playerId, 3);
+    else if (v !== '8') addSips(playerId, parseInt(v, 10));
+    setCardModal(null);
+    nextTurn();
   }
 
   function closeModalAndNext() {
@@ -410,18 +447,27 @@ function App() {
     if (caseNum === 8) addSips(playerId, 5);
     if (caseNum === 16) addSips(playerId, 6);
     if (caseNum === 31 || caseNum === 43) addSips(playerId, 5);
+    if (caseNum === 49) addSips(playerId, 5);
 
     if (caseNum === 4) { setCupidonOpen({ playerId }); return; }
-    if ([7, 15, 30, 49].includes(caseNum)) {
+    if ([7, 15, 30].includes(caseNum)) {
       const others = players.filter((p) => p.id !== playerId);
       setGiveModal({ playerId, total: 5, others });
       return;
     }
     if (caseNum === 3) {
-      const p = players.find((x) => x.id === playerId);
-      const newPos = Math.min(60, (p?.position || 0) + 3);
-      movePlayer(playerId, newPos);
-      setTimeout(() => triggerCase(playerId, newPos), 500);
+      addSips(playerId, 3);
+      const others = players.filter((p) => p.id !== playerId);
+      setGiveModal({ playerId, total: 3, others });
+      return;
+    }
+    if ([12, 27, 47, 52, 63].includes(caseNum)) {
+      setCardModal({ playerId, card: drawCard() });
+      return;
+    }
+    if (caseNum === 64) {
+      players.forEach((p) => addSips(p.id, 3));
+      nextTurn();
       return;
     }
     if (caseNum === 39) {
@@ -455,7 +501,7 @@ function App() {
       const others = players.filter((p) => p.id !== playerId);
       const victim = others[Math.floor(Math.random() * others.length)];
       if (victim) {
-        let target = 1 + Math.floor(Math.random() * 59);
+        let target = 1 + Math.floor(Math.random() * 64);
         if (target === 57) target = 58;
         movePlayer(victim.id, target);
         showToast(`${victim.name} téléporté(e) case ${target} !`);
@@ -463,7 +509,7 @@ function App() {
       nextTurn();
       return;
     }
-    if (caseNum === 60) return;
+    if (caseNum === 65) return;
     nextTurn();
   }
 
@@ -628,6 +674,12 @@ function App() {
           onDone={(dist) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "giveSips", args: { dist } } }); else onGiveDone(dist); }} />
       )}
 
+      {cardModal && screen === "game" && (
+        <CardDrawModal card={cardModal.card}
+          player={players.find((p) => p.id === cardModal.playerId)}
+          onClose={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeCardModal" } }); else closeCardModal(); }} />
+      )}
+
       {pauseOpen && (
         <PauseMenu onResume={() => setPauseOpen(false)}
           onHome={() => { setPauseOpen(false); leaveRoom(); }}
@@ -640,7 +692,7 @@ function App() {
           allPlayers={players}
           targets={computeTargets(activeCaseModal.caseNum, players, activeCaseModal.playerId)}
           onClose={() => { if (mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
-          isWin={activeCaseModal.caseNum === 60}
+          isWin={activeCaseModal.caseNum === 65}
           readOnly={mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current} />
       )}
 
@@ -670,7 +722,7 @@ function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, insp
         }}>
           <div className="icon-splash">{c.icon}</div>
           <div className="modal-cat">{categoryLabel(c.cat)}</div>
-          <div className="modal-num">{c.n === 0 ? "Départ" : c.n === 60 ? "Arrivée" : `Case ${c.n}`}</div>
+          <div className="modal-num">{c.n === 0 ? "Départ" : c.n === 65 ? "Arrivée" : `Case ${c.n}`}</div>
           <div className="modal-title">{c.title}</div>
         </div>
         <div className="modal-body">

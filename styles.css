@@ -26,6 +26,7 @@
   --cat-special: #c4ff4d;
   --cat-party: #ff6e6e;
   --cat-target: #ff9ec3;
+  --cat-card: #f5c842;
 
   --radius: 16px;
   --radius-lg: 28px;
@@ -650,6 +651,7 @@ button:focus-visible {
 .cell.c-special { background: linear-gradient(135deg, #c4ff4d, #7ba51a); color: #1a2300; }
 .cell.c-party   { background: linear-gradient(135deg, #ff6e6e, #b02020); }
 .cell.c-target  { background: linear-gradient(135deg, #ff9ec3, #c44d84); }
+.c-card { --cat: var(--cat-card); }
 
 .token-path {
   position: absolute;
@@ -1073,6 +1075,42 @@ button:focus-visible {
   color: var(--paper);
   letter-spacing: -0.5px;
 }
+
+/* ---------- Playing card ---------- */
+.playing-card {
+  width: 100px;
+  height: 145px;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.card-back {
+  background: #1a1040;
+  border: 2px solid rgba(255,200,50,0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--paper);
+  cursor: pointer;
+}
+.card-corner {
+  position: absolute;
+  font-size: 14px;
+  line-height: 1.2;
+  text-align: center;
+}
+.card-corner-tl { top: 6px; left: 8px; }
+.card-corner-br { bottom: 6px; right: 8px; transform: rotate(180deg); }
+.card-suit-big { font-size: 52px; line-height: 1; }
 
 /* -------- Shot splash -------- */
 .shot-splash {

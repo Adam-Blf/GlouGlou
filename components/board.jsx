@@ -3,16 +3,16 @@
 const { useState: useStateB, useMemo: useMemoB, useEffect: useEffectB, useRef: useRefB } = React;
 
 // Snake-serpentine layout: row 0 is 1..10 L->R, row 1 is 11..20 R->L, etc.
-// 60 cases => 6 rows of 10.
-// Case 0 (Départ) sits before case 1 (top-left), Case 60 (Arrivée) sits after case 59.
-// For simplicity we display cases 1..60 in serpentine, and put DÉPART/ARRIVÉE as overlays.
+// 65 cases => 7 rows of 10 (last row partial).
+// Case 0 (Départ) sits before case 1 (top-left), Case 65 (Arrivée) sits after case 64.
+// For simplicity we display cases 1..65 in serpentine, and put DÉPART/ARRIVÉE as overlays.
 
 function buildLayout() {
   // Returns Array<{n, row, col}>
-  const rows = 6;
+  const rows = 7;
   const cols = 10;
   const layout = [];
-  for (let i = 1; i <= 60; i++) {
+  for (let i = 1; i <= 65; i++) {
     const idx = i - 1;
     const row = Math.floor(idx / cols);
     const colInRow = idx % cols;
@@ -84,7 +84,7 @@ function Board({ players, currentPlayerId, onCellClick, highlightCell }) {
                   <div className="cell-num">{n}</div>
                   <div className="cell-icon">{c.icon}</div>
                   <div className="cell-title">{c.title}</div>
-                  {n === 60 && <div style={{ position: "absolute", inset: 0, boxShadow: "0 0 20px rgba(255,179,71,0.6) inset", pointerEvents: "none" }} />}
+                  {n === 65 && <div style={{ position: "absolute", inset: 0, boxShadow: "0 0 20px rgba(255,179,71,0.6) inset", pointerEvents: "none" }} />}
                   <div className="cell-tokens">
                     {tokens.map(p => {
                       const ch = window.CHARACTERS.find(x => x.id === p.characterId);
@@ -103,7 +103,7 @@ function Board({ players, currentPlayerId, onCellClick, highlightCell }) {
             })}
           </div>
           <div className="mono muted" style={{ textAlign: "center", marginTop: 16, fontSize: 10 }}>
-            DÉPART → 1 → 2 → … → 60 ARRIVÉE &nbsp;·&nbsp; parcours en serpentin
+            DÉPART → 1 → 2 → … → 65 ARRIVÉE &nbsp;·&nbsp; parcours en serpentin
           </div>
         </div>
       </div>
