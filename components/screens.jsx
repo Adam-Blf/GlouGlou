@@ -2,9 +2,11 @@
 
 const { useState: useStateH } = React;
 
-function HomeScreen({ onCreate, onJoin }) {
+function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
   const [mode, setMode] = useStateH("home"); // home | join
   const [code, setCode] = useStateH(["", "", "", "", "", ""]);
+  const [muted, setMuted] = useStateH(() => window.SFX ? window.SFX.isMuted() : false);
+  function toggleMute() { const v = !muted; setMuted(v); window.SFX?.setMuted(v); }
 
   function setCodeChar(i, v) {
     const next = [...code];
@@ -35,6 +37,14 @@ function HomeScreen({ onCreate, onJoin }) {
           </button>
           <button className="btn btn-ghost" onClick={() => setMode("join")}>
             🔑 Rejoindre avec un code
+          </button>
+          {savedSession && onResume && (
+            <button className="btn btn-accent" onClick={onResume} style={{ flexBasis: "100%" }}>
+              ↩️ Reprendre {savedSession.code}
+            </button>
+          )}
+          <button className="btn btn-ghost" onClick={toggleMute} style={{ flexBasis: "100%", fontSize: 12, padding: "8px 14px" }}>
+            {muted ? "🔇 Son coupé" : "🔊 Son + vibrations actifs"} · clique pour basculer
           </button>
         </div>
       )}
@@ -84,6 +94,8 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
   const ready = players.length >= 1 && players.every(p => p.characterId && p.gender);
   const label = mpStatus === "connecting"
     ? "Connexion…"
+    : mpStatus === "reconnecting"
+    ? "Reconnexion en cours…"
     : mpStatus === "error"
     ? "Connexion perdue"
     : mpMode === "guest"

@@ -16,13 +16,15 @@ function peerIdFor(code) {
 //   onJoinRequested(peerId, me)   // host only
 //   onActionReceived(peerId, act) // host only
 //   onConnectionStatus(status)    // both
-// Returns { status, error, broadcast(msg), sendToHost(msg), clearError }
+// Returns { status, error, broadcast(msg), sendToHost(msg), clearError, retry }
 function useMultiplayer({ mode, code, onStateReceived, onJoinRequested, onActionReceived, onConnectionStatus }) {
   const [status, setStatus] = useStateNet("idle");
   const [error, setError] = useStateNet(null);
+  const [retryKey, setRetryKey] = useStateNet(0);
   const peerRef = useRefNet(null);
   const connsRef = useRefNet(new Map());
   const hostConnRef = useRefNet(null);
+  const retryCountRef = useRefNet(0);
   const cbRef = useRefNet({});
   cbRef.current = { onStateReceived, onJoinRequested, onActionReceived, onConnectionStatus };
 
@@ -86,20 +88,38 @@ function useMultiplayer({ mode, code, onStateReceived, onJoinRequested, onAction
         });
         conn.on("close", () => {
           if (destroyed) return;
-          setStatus("error");
-          setError("Connexion à l'hôte perdue");
+          setStatus("reconnecting");
+          setError("Connexion perdue · retente…");
+          // Auto-retry with exponential backoff, up to 8 attempts
+          if (retryCountRef.current < 8) {
+            retryCountRef.current += 1;
+            const delay = Math.min(8000, 600 * Math.pow(1.6, retryCountRef.current));
+            setTimeout(() => { if (!destroyed) setRetryKey((k) => k + 1); }, delay);
+          } else {
+            setStatus("error");
+            setError("Reconnexion impossible · l'hôte a quitté ?");
+          }
         });
-        conn.on("error", (e) => {
-          if (destroyed) return;
-          setError(String(e?.type || e));
-          setStatus("error");
-        });
+        conn.on("error", () => {});
       });
       peer.on("error", (e) => {
         if (destroyed) return;
         const type = e && e.type;
-        if (type === "peer-unavailable") setError("Partie introuvable · vérifie le code");
-        else if (type === "network") setError("Broker indisponible · réessaie");
+        if (type === "peer-unavailable") {
+          // Host not (yet) online. For reconnect, retry silently up to 8x.
+          if (retryCountRef.current < 8) {
+            retryCountRef.current += 1;
+            setStatus("reconnecting");
+            setError("Hôte introuvable · retente…");
+            const delay = Math.min(8000, 600 * Math.pow(1.6, retryCountRef.current));
+            setTimeout(() => { if (!destroyed) setRetryKey((k) => k + 1); }, delay);
+          } else {
+            setError("Partie introuvable · vérifie le code");
+            setStatus("error");
+          }
+          return;
+        }
+        if (type === "network") setError("Broker indisponible · réessaie");
         else setError(type || String(e));
         setStatus("error");
       });
@@ -111,9 +131,14 @@ function useMultiplayer({ mode, code, onStateReceived, onJoinRequested, onAction
       peerRef.current = null;
       connsRef.current.clear();
       hostConnRef.current = null;
-      setStatus("idle");
     };
-  }, [mode, code]);
+  }, [mode, code, retryKey]);
+
+  // Reset retry counter when mode/code change (fresh session)
+  useEffectNet(() => { retryCountRef.current = 0; }, [mode, code]);
+
+  // Successful connect clears retry counter
+  useEffectNet(() => { if (status === "ready") retryCountRef.current = 0; }, [status]);
 
   const broadcast = useCallbackNet((msg) => {
     connsRef.current.forEach((conn) => {

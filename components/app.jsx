@@ -38,6 +38,30 @@ function categoryLabel(cat) {
   })[cat] || cat.toUpperCase();
 }
 
+// Compute auto-targeted players for a given case (targets who has to drink)
+function computeTargets(caseNum, players, currentPlayerId) {
+  const cur = players.find((p) => p.id === currentPlayerId);
+  const others = players.filter((p) => p.id !== currentPlayerId);
+  switch (caseNum) {
+    case 5:  return { label: "Tout le monde boit 2 🍻",       list: players };
+    case 23: return { label: "Tout le monde prend 2 🍻",      list: players };
+    case 52: return { label: "Eau pour tous 💧",              list: players };
+    case 19: return { label: "Les hommes 🍌 boivent 2",        list: players.filter((p) => p.gender === "homme") };
+    case 44: return { label: "Les hommes 🍌 boivent 3",        list: players.filter((p) => p.gender === "homme") };
+    case 29: return { label: "Les femmes 🍑 boivent 2",        list: players.filter((p) => p.gender === "femme") };
+    case 46: return { label: "Les femmes 🍑 boivent 3",        list: players.filter((p) => p.gender === "femme") };
+    case 17:
+    case 35: return { label: "Les joueurs derrière boivent 2 ⬇️", list: cur ? others.filter((p) => p.position < cur.position) : [] };
+    default: return null;
+  }
+}
+
+// Session persistence for reconnect
+const SESSION_KEY = "glouglou-session-v1";
+function saveSession(data) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch (_) {} }
+function loadSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (_) { return null; } }
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch (_) {} }
+
 function App() {
   // Multiplayer mode
   const [mpMode, setMpMode] = useState("off");        // "off" | "host" | "guest"
@@ -51,10 +75,14 @@ function App() {
   const [inspectCase, setInspectCase] = useState(null);
   const [pauseOpen, setPauseOpen] = useState(false);
 
-  // Me (local identity)
-  const meIdRef = useRef(uid());
+  // Me (local identity) · try to restore stable id from previous session
+  const [savedSession, setSavedSession] = useState(() => loadSession());
+  const meIdRef = useRef(savedSession?.id || uid());
   const [me, setMe] = useState(() => ({
-    id: meIdRef.current, name: "Toi", characterId: null, gender: null,
+    id: meIdRef.current,
+    name: savedSession?.name || "Toi",
+    characterId: savedSession?.characterId || null,
+    gender: savedSession?.gender || null,
     position: 0, jokers: 0, isHost: false,
   }));
 
@@ -116,6 +144,7 @@ function App() {
         if (exists) {
           return prev.map((p) => p.id === incomingMe.id ? { ...p, name: incomingMe.name, characterId: incomingMe.characterId, gender: incomingMe.gender } : p);
         }
+        window.SFX?.join();
         showToast(`${incomingMe.name || "Un joueur"} a rejoint`);
         return [...prev, { ...incomingMe, position: 0, jokers: 0, isHost: false }];
       });
@@ -190,11 +219,13 @@ function App() {
 
   // ---- Screen transitions / setup -------------------------------
   function createRoom() {
+    window.SFX?.unlock();
     const code = genRoomCode();
     setRoomCode(code);
     setMpMode("host");
     setMe((m) => ({ ...m, isHost: true }));
     setPlayers([{ ...me, isHost: true }]);
+    saveSession({ role: "host", code, id: meIdRef.current, name: me.name, characterId: me.characterId, gender: me.gender });
     setScreen("hostSetup");
   }
 
@@ -205,20 +236,34 @@ function App() {
 
   function joinRoom(code) {
     if (!code || code.length < 4) return;
-    setRoomCode(code.toUpperCase());
+    window.SFX?.unlock();
+    const up = code.toUpperCase();
+    setRoomCode(up);
     setMpMode("guest");
     setMe((m) => ({ ...m, isHost: false }));
-    setScreen("pickChar");
+    saveSession({ role: "guest", code: up, id: meIdRef.current, name: me.name, characterId: me.characterId, gender: me.gender });
+    setScreen(me.characterId && me.gender ? "lobby" : "pickChar");
+  }
+
+  function resumeSession() {
+    const s = loadSession();
+    if (!s) return;
+    window.SFX?.unlock();
+    setRoomCode(s.code);
+    setMpMode(s.role === "host" ? "host" : "guest");
+    setMe((m) => ({ ...m, name: s.name || m.name, characterId: s.characterId || null, gender: s.gender || null, isHost: s.role === "host" }));
+    if (s.role === "host") setPlayers([{ id: meIdRef.current, name: s.name, characterId: s.characterId, gender: s.gender, position: 0, jokers: 0, isHost: true }]);
+    setSavedSession(null);
+    setScreen(s.characterId && s.gender ? "lobby" : "pickChar");
   }
 
   function onConfirmChar({ characterId, gender, name }) {
     const updated = { ...me, characterId, gender, name };
     setMe(updated);
+    saveSession({ role: mpMode === "host" ? "host" : "guest", code: roomCode, id: meIdRef.current, name, characterId, gender });
     if (mpMode === "guest") {
-      // Tell host about my identity update; host will add me to its roster
       mp.sendToHost({ type: "join", me: { id: meIdRef.current, name, characterId, gender } });
     } else {
-      // Host or local: update my player entry
       setPlayers((ps) => {
         const exists = ps.find((p) => p.id === meIdRef.current);
         if (exists) return ps.map((p) => p.id === meIdRef.current ? { ...p, name, characterId, gender } : p);
@@ -229,6 +274,8 @@ function App() {
   }
 
   function leaveRoom() {
+    clearSession();
+    setSavedSession(null);
     setMpMode("off");
     setPlayers([]);
     setRoomCode(null);
@@ -265,9 +312,11 @@ function App() {
 
   function rollDice(playerIdArg) {
     if (rolling || activeCaseModal || winner || shotSplash || showTurnIntro || cupidonOpen || giveModal || pauseOpen) return;
+    window.SFX?.diceRolling();
     setRolling(true);
     const target = 1 + Math.floor(Math.random() * 6);
     setTimeout(() => {
+      window.SFX?.diceLand(target);
       setDice(target);
       setRolling(false);
       const pid = playerIdArg || players[turnIdx]?.id;
@@ -298,6 +347,7 @@ function App() {
     const c = window.CASES[caseNum];
     if (!c) return;
     if (caseNum === 60) {
+      window.SFX?.win();
       setWinner(players.find((p) => p.id === playerId));
       setConfetti(true);
       setTimeout(() => setConfetti(false), 1400);
@@ -308,11 +358,16 @@ function App() {
       setPlayers((ps) => ps.map((p) => p.id === playerId ? { ...p, jokers: p.jokers + 1 } : p));
     }
     if ([6, 21, 33, 45, 58].includes(caseNum)) {
+      window.SFX?.shot();
       setShotSplash({ label: caseNum === 58 ? "DOUBLE SHOT !" : "SHOT !" });
     } else if (caseNum === 13 || caseNum === 59) {
+      window.SFX?.shot();
       setShotSplash({ label: "CUL SEC !" });
     } else if (caseNum === 37) {
+      window.SFX?.shot();
       setShotSplash({ label: "PINTE DU ROI" });
+    } else {
+      window.SFX?.caseDing();
     }
     if (caseNum === 24 || caseNum === 42) setActiveRoles((rs) => replaceOrAdd(rs, "Roi des questions", playerId));
     else if (caseNum === 25 || caseNum === 40) setActiveRoles((rs) => replaceOrAdd(rs, "Reine des p***s", playerId));
@@ -410,7 +465,7 @@ function App() {
     if (winner) return;
     setTurnIdx((idx) => (idx + 1) % Math.max(1, players.length));
     setDice(null);
-    if (tweaks.turnIntro) setShowTurnIntro(true);
+    if (tweaks.turnIntro) { window.SFX?.turnIntro(); setShowTurnIntro(true); }
   }
 
   // Transition to end screen (host)
@@ -435,7 +490,7 @@ function App() {
       <div className="bg-blobs" />
 
       {screen === "home" && (
-        <HomeScreen onCreate={createRoom} onJoin={joinRoom} />
+        <HomeScreen onCreate={createRoom} onJoin={joinRoom} onResume={resumeSession} savedSession={savedSession} />
       )}
       {screen === "hostSetup" && (
         <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => { leaveRoom(); }} />
@@ -552,6 +607,8 @@ function App() {
       {activeCaseModal && (
         <CaseModal caseData={window.CASES[activeCaseModal.caseNum]}
           player={players.find((p) => p.id === activeCaseModal.playerId)}
+          allPlayers={players}
+          targets={computeTargets(activeCaseModal.caseNum, players, activeCaseModal.playerId)}
           onClose={() => { if (mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
           isWin={activeCaseModal.caseNum === 60}
           readOnly={mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current} />
@@ -571,7 +628,7 @@ function App() {
   );
 }
 
-function CaseModal({ caseData, player, onClose, isWin, inspectOnly, readOnly }) {
+function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, inspectOnly, readOnly }) {
   if (!caseData) return null;
   const c = caseData;
   const character = player && window.CHARACTERS.find((x) => x.id === player.characterId);
@@ -594,6 +651,26 @@ function CaseModal({ caseData, player, onClose, isWin, inspectOnly, readOnly }) 
             </div>
           )}
           <div>{c.desc}</div>
+          {!inspectOnly && targets && (
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid var(--line)" }}>
+              <div className="mono muted" style={{ fontSize: 10, marginBottom: 8 }}>{targets.label}</div>
+              {targets.list.length === 0 ? (
+                <div className="mono muted">Personne ce coup-ci</div>
+              ) : (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                  {targets.list.map((p) => {
+                    const ch = window.CHARACTERS.find((x) => x.id === p.characterId);
+                    return (
+                      <div key={p.id} className="role-chip" style={{ background: "rgba(0,0,0,0.25)" }}>
+                        <Avatar character={ch} size={24} />
+                        <span style={{ fontWeight: 700, fontSize: 12 }}>{p.name} {genderIcon(p.gender)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           {isWin && (
             <div style={{ marginTop: 16, padding: 14, borderRadius: 12,
               background: "linear-gradient(90deg, var(--neon-4), var(--neon))",
