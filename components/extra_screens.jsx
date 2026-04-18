@@ -241,8 +241,16 @@ function ShotSplash({ onDone, label = "SHOT !" }) {
 }
 
 // ---------- End stats ----------
-function EndStatsScreen({ winner, players, history, onReplay, onHome }) {
-  const ranking = [...players].sort((a, b) => b.position - a.position);
+function EndStatsScreen({ winner, players, history, finishedPlayerIds, onReplay, onHome }) {
+  const finishedIds = finishedPlayerIds || [];
+  const ranking = [...players].sort((a, b) => {
+    const ai = finishedIds.indexOf(a.id);
+    const bi = finishedIds.indexOf(b.id);
+    if (ai !== -1 && bi !== -1) return ai - bi; // both finished: by finish order
+    if (ai !== -1) return -1; // a finished, b didn't: a first
+    if (bi !== -1) return 1;  // b finished, a didn't: b first
+    return b.position - a.position; // neither finished: by position
+  });
   return (
     <div className="screen">
       <div className="topbar">
@@ -265,10 +273,12 @@ function EndStatsScreen({ winner, players, history, onReplay, onHome }) {
         <div className="col" style={{ gap: 8 }}>
           {ranking.map((p, i) => {
             const c = window.CHARACTERS.find(x => x.id === p.characterId);
+            const finishPos = (finishedPlayerIds || []).indexOf(p.id);
+            const medal = finishPos === 0 ? "🥇" : finishPos === 1 ? "🥈" : finishPos === 2 ? "🥉" : finishPos >= 0 ? `#${finishPos + 1}` : `${i + 1}`;
             return (
               <div key={p.id} className="mini-player">
-                <div style={{ width: 24, textAlign: "center", fontFamily: "var(--font-display)", fontSize: 20, fontStyle: "italic" }}>
-                  {i + 1}
+                <div style={{ width: 28, textAlign: "center", fontFamily: "var(--font-display)", fontSize: 20, fontStyle: "italic" }}>
+                  {medal}
                 </div>
                 <Avatar character={c} size={32} />
                 <div>
@@ -282,7 +292,19 @@ function EndStatsScreen({ winner, players, history, onReplay, onHome }) {
         </div>
       </div>
 
-      <div className="row" style={{ justifyContent: "center" }}>
+      <div className="row" style={{ justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
+        <button className="btn btn-ghost" style={{ flexBasis: "100%" }} onClick={() => {
+          const lines = ranking.map((p, i) => {
+            const finishPos = (finishedPlayerIds || []).indexOf(p.id);
+            const medal = finishPos === 0 ? "🥇" : finishPos === 1 ? "🥈" : finishPos === 2 ? "🥉" : finishPos >= 0 ? `#${finishPos + 1}` : `${i + 1}.`;
+            return `${medal} ${p.name} — ${(history?.sips?.[p.id]) || 0} gorgées 🍺`;
+          }).join("\n");
+          const text = `🎲 GlouGlou! — Résultats\n\n${lines}\n\nJoue sur glouglou.vercel.app`;
+          if (navigator.share) navigator.share({ title: "GlouGlou! Résultats", text });
+          else navigator.clipboard?.writeText(text).then(() => alert("Résultats copiés !"));
+        }}>
+          📤 Partager les résultats
+        </button>
         <button className="btn btn-primary" onClick={onReplay}>🔁 Rejouer</button>
         <button className="btn btn-ghost" onClick={onHome}>Retour accueil</button>
       </div>

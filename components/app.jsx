@@ -222,6 +222,7 @@ function App() {
       case "pickCupidon":     onCupidChoose(args.partnerId); break;
       case "giveSips":        onGiveDone(args.dist); break;
       case "closeCardModal": closeCardModal(); break;
+      case "useJoker": useJoker(); break;
       default: break;
     }
   }
@@ -433,6 +434,15 @@ function App() {
     return { value: values[Math.floor(Math.random() * 13)], suit: suits[Math.floor(Math.random() * 4)] };
   }
 
+  function useJoker() {
+    if (!activeCaseModal) return;
+    const { playerId } = activeCaseModal;
+    setPlayers((ps) => ps.map((p) => p.id === playerId ? { ...p, jokers: Math.max(0, p.jokers - 1) } : p));
+    showToast("🃏 Joker utilisé ! Effet annulé.");
+    setActiveCaseModal(null);
+    nextTurn();
+  }
+
   function closeCardModal() {
     if (!cardModal) return;
     const { playerId, card } = cardModal;
@@ -602,6 +612,7 @@ function App() {
       {screen === "rules" && <RulesScreen onDone={rulesDone} />}
       {screen === "end" && (
         <EndStatsScreen winner={winner} players={players} history={history}
+          finishedPlayerIds={finishedPlayerIds}
           onReplay={() => { setScreen("lobby"); setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 }))); setWinner(null); setFinishedPlayerIds([]); setActiveRoles([]); setCupidLinks([]); setHistory({ sips: {} }); }}
           onHome={() => leaveRoom({ confirmed: true })} />
       )}
@@ -706,15 +717,23 @@ function App() {
           onRules={() => { setPauseOpen(false); setScreen("rules"); }} />
       )}
 
-      {activeCaseModal && (
-        <CaseModal caseData={window.CASES[activeCaseModal.caseNum]}
-          player={players.find((p) => p.id === activeCaseModal.playerId)}
-          allPlayers={players}
-          targets={computeTargets(activeCaseModal.caseNum, players, activeCaseModal.playerId)}
-          onClose={() => { if (mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
-          isWin={activeCaseModal.caseNum === 65}
-          readOnly={mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current} />
-      )}
+      {activeCaseModal && (() => {
+        const modalPlayer = players.find((p) => p.id === activeCaseModal.playerId);
+        const isReadOnly = mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current;
+        const isLocalReadOnly = mpMode === "local" && activeCaseModal.playerId !== currentPlayer?.id;
+        const canJoker = !isReadOnly && !isLocalReadOnly && (modalPlayer?.jokers || 0) > 0 && activeCaseModal.caseNum !== 65 && window.CASES[activeCaseModal.caseNum]?.cat !== "special";
+        return (
+          <CaseModal caseData={window.CASES[activeCaseModal.caseNum]}
+            player={modalPlayer}
+            allPlayers={players}
+            targets={computeTargets(activeCaseModal.caseNum, players, activeCaseModal.playerId)}
+            onClose={() => { if (isReadOnly) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
+            isWin={activeCaseModal.caseNum === 65}
+            readOnly={isReadOnly || isLocalReadOnly}
+            jokers={modalPlayer?.jokers || 0}
+            onJoker={canJoker ? () => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "useJoker" } }); else useJoker(); } : null} />
+        );
+      })()}
 
       {inspectCase != null && !activeCaseModal && (
         <CaseModal caseData={window.CASES[inspectCase]} onClose={() => setInspectCase(null)} inspectOnly />
@@ -730,7 +749,7 @@ function App() {
   );
 }
 
-function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, inspectOnly, readOnly }) {
+function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, inspectOnly, readOnly, jokers, onJoker }) {
   if (!caseData) return null;
   const c = caseData;
   const character = player && window.CHARACTERS.find((x) => x.id === player.characterId);
@@ -782,6 +801,11 @@ function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, insp
           )}
         </div>
         <div className="modal-actions">
+          {onJoker && (
+            <button className="btn btn-ghost" onClick={onJoker} style={{ borderColor: "gold", color: "gold" }}>
+              🃏 Joker ({jokers}) · Esquiver
+            </button>
+          )}
           {inspectOnly ? (
             <button className="btn btn-ghost" onClick={onClose}>Fermer</button>
           ) : readOnly ? (
