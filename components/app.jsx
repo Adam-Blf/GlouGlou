@@ -95,6 +95,7 @@ function App() {
   const [rolling, setRolling] = useState(false);
   const [activeCaseModal, setActiveCaseModal] = useState(null);
   const [winner, setWinner] = useState(null);
+  const [finishedPlayerIds, setFinishedPlayerIds] = useState([]);
   const [history, setHistory] = useState({ sips: {} });
   const [showTurnIntro, setShowTurnIntro] = useState(false);
   const [cupidonOpen, setCupidonOpen] = useState(null);
@@ -134,6 +135,7 @@ function App() {
       if (s.activeRoles !== undefined) setActiveRoles(s.activeRoles);
       if (s.history !== undefined) setHistory(s.history);
       if (s.winner !== undefined) setWinner(s.winner);
+      if (s.finishedPlayerIds !== undefined) setFinishedPlayerIds(s.finishedPlayerIds);
       if (s.gameConfig !== undefined) setGameConfig(s.gameConfig);
       if (s.backwardPlayerIds !== undefined) setBackwardPlayerIds(s.backwardPlayerIds);
       if (s.cardModal !== undefined) setCardModal(s.cardModal);
@@ -166,8 +168,8 @@ function App() {
   const stateSnapshot = useMemo(() => ({
     phase, players, turnIdx, dice, rolling,
     activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash,
-    cupidLinks, activeRoles, history, winner, gameConfig, backwardPlayerIds, cardModal,
-  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, gameConfig, backwardPlayerIds, cardModal]);
+    cupidLinks, activeRoles, history, winner, finishedPlayerIds, gameConfig, backwardPlayerIds, cardModal,
+  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, finishedPlayerIds, gameConfig, backwardPlayerIds, cardModal]);
 
   useEffect(() => {
     if (mpMode !== "host") return;
@@ -316,6 +318,7 @@ function App() {
     setActiveRoles([]);
     setHistory({ sips: {} });
     setBackwardPlayerIds([]);
+    setFinishedPlayerIds([]);
     setCardModal(null);
     setScreen("home");
   }
@@ -329,6 +332,7 @@ function App() {
     setActiveRoles([]);
     setHistory({ sips: {} });
     setBackwardPlayerIds([]);
+    setFinishedPlayerIds([]);
     setCardModal(null);
     setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 })));
     setScreen("rules");
@@ -341,7 +345,7 @@ function App() {
   }
 
   function rollDice(playerIdArg) {
-    if (rolling || activeCaseModal || winner || shotSplash || showTurnIntro || cupidonOpen || giveModal || pauseOpen) return;
+    if (rolling || activeCaseModal || allFinished || shotSplash || showTurnIntro || cupidonOpen || giveModal || pauseOpen) return;
     window.SFX?.diceRolling();
     setRolling(true);
     const target = 1 + Math.floor(Math.random() * 6);
@@ -384,7 +388,14 @@ function App() {
     if (!c) return;
     if (caseNum === 65) {
       window.SFX?.win();
-      setWinner(players.find((p) => p.id === playerId));
+      setFinishedPlayerIds((prev) => {
+        if (prev.includes(playerId)) return prev;
+        if (prev.length === 0) setWinner(players.find((p) => p.id === playerId));
+        const rank = prev.length + 1;
+        const pName = players.find((p) => p.id === playerId)?.name || "Un joueur";
+        showToast(`🏆 ${pName} termine en #${rank} !`);
+        return [...prev, playerId];
+      });
       setConfetti(true);
       setTimeout(() => setConfetti(false), 1400);
       setActiveCaseModal({ caseNum, playerId });
@@ -529,8 +540,16 @@ function App() {
   }
 
   function nextTurn() {
-    if (winner) return;
-    setTurnIdx((idx) => (idx + 1) % Math.max(1, players.length));
+    if (allFinished) return;
+    setTurnIdx((idx) => {
+      let next = (idx + 1) % Math.max(1, players.length);
+      let tries = 0;
+      while (finishedPlayerIds.includes(players[next]?.id) && tries < players.length) {
+        next = (next + 1) % Math.max(1, players.length);
+        tries++;
+      }
+      return next;
+    });
     setDice(null);
     if (mpMode === "local") {
       setShowHandoff(true);
@@ -539,14 +558,15 @@ function App() {
     if (tweaks.turnIntro) { window.SFX?.turnIntro(); setShowTurnIntro(true); }
   }
 
-  // Transition to end screen (host)
+  // ---- Derived (game end) -------------------------------------------
+  const allFinished = players.length > 0 && players.every((p) => finishedPlayerIds.includes(p.id));
   useEffect(() => {
     if (mpMode === "guest") return;
-    if (winner && !activeCaseModal) {
+    if (allFinished && !activeCaseModal) {
       const id = setTimeout(() => setScreen("end"), 800);
       return () => clearTimeout(id);
     }
-  }, [winner, activeCaseModal, mpMode]);
+  }, [allFinished, activeCaseModal, mpMode]);
 
   // ---- Derived ---------------------------------------------------
   const currentPlayer = players[turnIdx];
@@ -582,7 +602,7 @@ function App() {
       {screen === "rules" && <RulesScreen onDone={rulesDone} />}
       {screen === "end" && (
         <EndStatsScreen winner={winner} players={players} history={history}
-          onReplay={() => { setScreen("lobby"); setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 }))); setWinner(null); setActiveRoles([]); setCupidLinks([]); setHistory({ sips: {} }); }}
+          onReplay={() => { setScreen("lobby"); setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 }))); setWinner(null); setFinishedPlayerIds([]); setActiveRoles([]); setCupidLinks([]); setHistory({ sips: {} }); }}
           onHome={() => leaveRoom({ confirmed: true })} />
       )}
 
@@ -612,7 +632,7 @@ function App() {
             <div className="panel" style={{ padding: 0 }}>
               <Dice value={dice} rolling={rolling}
                 onRoll={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "rollDice", args: { playerId: currentPlayer?.id } } }); else rollDice(); }}
-                disabled={!canAct || !!activeCaseModal || !!winner}
+                disabled={!canAct || !!activeCaseModal || finishedPlayerIds.includes(currentPlayer?.id)}
                 cta={!canAct ? `${currentPlayer?.name || "…"} joue…` : "Lancer le dé"} />
             </div>
 
@@ -625,7 +645,7 @@ function App() {
                     <div key={p.id} className={"mini-player" + (i === turnIdx ? " is-turn" : "")}>
                       <Avatar character={ch} size={32} />
                       <div>
-                        <div style={{ fontWeight: 700 }}>{p.name} {genderIcon(p.gender)}{p.id === meIdRef.current && <span className="mono muted" style={{ marginLeft: 4 }}>(toi)</span>}</div>
+                        <div style={{ fontWeight: 700 }}>{p.name} {genderIcon(p.gender)}{finishedPlayerIds.includes(p.id) && <span style={{ marginLeft: 4 }}>🏆</span>}{p.id === meIdRef.current && <span className="mono muted" style={{ marginLeft: 4 }}>(toi)</span>}</div>
                         <div className="mono muted" style={{ fontSize: 10 }}>{ch?.family} · {(history.sips[p.id] || 0)} 🍺</div>
                       </div>
                       {p.jokers > 0 && <span className="joker-badge">🃏×{p.jokers}</span>}
