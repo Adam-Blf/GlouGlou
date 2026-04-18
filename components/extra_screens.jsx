@@ -333,8 +333,29 @@ function ActiveRolesBar({ roles, players }) {
   );
 }
 
+// ---------- Handoff (local multi: pass the phone) ----------
+function HandoffScreen({ player, character, onReady }) {
+  if (!player) return null;
+  return (
+    <div className="handoff-screen">
+      <div className="handoff-inner">
+        <div className="mono muted" style={{ fontSize: 13 }}>Passe le téléphone à</div>
+        <div className="handoff-avatar" style={{
+          background: `radial-gradient(circle at 30% 30%, ${character?.palette?.accent ?? "#fff"}, ${character?.palette?.bg ?? "#333"})`,
+          color: character?.palette?.accent ?? "#fff",
+        }}>{character?.emoji ?? "🎲"}</div>
+        <div className="handoff-name">{player.name}</div>
+        <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={onReady}>
+          C'est à moi ! →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 Object.assign(window, {
   RulesScreen, HostSetupScreen, TurnIntro,
   CupidonModal, GiveSipsModal, ShotSplash,
   EndStatsScreen, PauseMenu, ActiveRolesBar,
+  HandoffScreen,
 });

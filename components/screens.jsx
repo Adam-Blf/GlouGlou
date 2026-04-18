@@ -2,7 +2,7 @@
 
 const { useState: useStateH } = React;
 
-function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
+function HomeScreen({ onCreate, onCreateLocal, onJoin, onResume, savedSession }) {
   const [mode, setMode] = useStateH("home"); // home | join
   const [code, setCode] = useStateH(["", "", "", "", "", ""]);
   const [muted, setMuted] = useStateH(() => window.SFX ? window.SFX.isMuted() : false);
@@ -42,7 +42,10 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
       {mode === "home" && (
         <div className="home-actions">
           <button className="btn btn-primary" onClick={onCreate}>
-            🎲 Nouvelle partie
+            🎲 Nouvelle partie en ligne
+          </button>
+          <button className="btn btn-ghost" onClick={onCreateLocal}>
+            🤝 Jouer en local (même appareil)
           </button>
           <button className="btn btn-ghost" onClick={() => setMode("join")}>
             🔑 Rejoindre avec un code
@@ -106,11 +109,11 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
   );
 }
 
-function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart, onEditMe }) {
+function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart, onEditMe, onAddLocalPlayer }) {
   function copyCode() {
     navigator.clipboard?.writeText(roomCode);
   }
-  const isHost = mpMode === "host";
+  const isHost = mpMode === "host" || mpMode === "local";
   const ready = players.length >= 1 && players.every(p => p.characterId && p.gender);
   const label = mpStatus === "connecting"
     ? "Connexion…"
@@ -120,6 +123,8 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
     ? "Connexion perdue"
     : mpMode === "guest"
     ? "Lobby · en attente de l'hôte"
+    : mpMode === "local"
+    ? "Lobby local · même appareil"
     : "Lobby · partage le code";
   return (
     <div className="screen">
@@ -128,11 +133,13 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
         <div className="pill">{label}</div>
       </div>
 
-      <div className="panel" style={{ textAlign: "center" }}>
-        <div className="mono muted">Code de la partie · partage-le</div>
-        <div className="room-code" onClick={copyCode} title="Cliquer pour copier">{roomCode}</div>
-        <div className="mono muted">{mpMode === "guest" ? "Attends que l'hôte lance" : "Cliquer pour copier"}</div>
-      </div>
+      {mpMode !== "local" && (
+        <div className="panel" style={{ textAlign: "center" }}>
+          <div className="mono muted">Code de la partie · partage-le</div>
+          <div className="room-code" onClick={copyCode} title="Cliquer pour copier">{roomCode}</div>
+          <div className="mono muted">{mpMode === "guest" ? "Attends que l'hôte lance" : "Cliquer pour copier"}</div>
+        </div>
+      )}
 
       <div className="col">
         <div className="mono muted">Joueurs ({players.length})</div>
@@ -145,7 +152,7 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
                 <div className="status-dot" />
                 <Avatar character={c} size={56} />
                 <div>
-                  <div className="name">{p.name}{isMe && <span className="mono muted" style={{ marginLeft: 6 }}>(toi)</span>}</div>
+                  <div className="name">{p.name}{isMe && mpMode !== "local" && <span className="mono muted" style={{ marginLeft: 6 }}>(toi)</span>}</div>
                   <div className="sub">{c ? c.family : "— aucun perso —"}</div>
                 </div>
                 <div className="tag-group">
@@ -162,7 +169,12 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
         </div>
       </div>
 
-      <div className="row" style={{ justifyContent: "center", marginTop: 10 }}>
+      <div className="row" style={{ justifyContent: "center", marginTop: 10, flexWrap: "wrap", gap: 10 }}>
+        {mpMode === "local" && onAddLocalPlayer && (
+          <button className="btn btn-ghost" onClick={onAddLocalPlayer}>
+            + Ajouter un joueur
+          </button>
+        )}
         {isHost ? (
           <button className="btn btn-primary" disabled={!ready} onClick={onStart}>
             🚀 Lancer la partie {!ready && "(choisis un perso et une option)"}
