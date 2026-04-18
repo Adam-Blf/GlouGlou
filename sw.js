@@ -1,4 +1,4 @@
-const CACHE = "glouglou-v1";
+const CACHE = "glouglou-v2";
 const CORE = [
   "./",
   "index.html",
@@ -8,6 +8,7 @@ const CORE = [
   "data/cases.js",
   "data/characters.js",
   "components/ui.jsx",
+  "components/net.jsx",
   "components/screens.jsx",
   "components/extra_screens.jsx",
   "components/board.jsx",

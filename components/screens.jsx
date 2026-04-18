@@ -76,22 +76,30 @@ function HomeScreen({ onCreate, onJoin }) {
   );
 }
 
-function LobbyScreen({ roomCode, players, me, onLeave, onStart, onEditMe }) {
+function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart, onEditMe }) {
   function copyCode() {
     navigator.clipboard?.writeText(roomCode);
   }
-  const ready = players.length >= 2 && players.every(p => p.characterId);
+  const isHost = mpMode === "host";
+  const ready = players.length >= 1 && players.every(p => p.characterId && p.gender);
+  const label = mpStatus === "connecting"
+    ? "Connexion…"
+    : mpStatus === "error"
+    ? "Connexion perdue"
+    : mpMode === "guest"
+    ? "Lobby · en attente de l'hôte"
+    : "Lobby · partage le code";
   return (
     <div className="screen">
       <div className="topbar">
         <button className="btn btn-ghost" onClick={onLeave}>← Quitter</button>
-        <div className="pill">Lobby — en attente</div>
+        <div className="pill">{label}</div>
       </div>
 
       <div className="panel" style={{ textAlign: "center" }}>
-        <div className="mono muted">Code de la partie — partage-le</div>
+        <div className="mono muted">Code de la partie · partage-le</div>
         <div className="room-code" onClick={copyCode} title="Cliquer pour copier">{roomCode}</div>
-        <div className="mono muted">Cliquer pour copier</div>
+        <div className="mono muted">{mpMode === "guest" ? "Attends que l'hôte lance" : "Cliquer pour copier"}</div>
       </div>
 
       <div className="col">
@@ -109,8 +117,7 @@ function LobbyScreen({ roomCode, players, me, onLeave, onStart, onEditMe }) {
                   <div className="sub">{c ? c.family : "— aucun perso —"}</div>
                 </div>
                 <div className="tag-group">
-                  {p.tags.includes("banana") && <span className="tag active" style={{ pointerEvents: "none" }}>🍌</span>}
-                  {p.tags.includes("peach")  && <span className="tag active" style={{ pointerEvents: "none" }}>🍑</span>}
+                  {p.gender && <span className="tag active" style={{ pointerEvents: "none" }}>{genderIcon(p.gender)}</span>}
                 </div>
                 {isMe && (
                   <button className="btn btn-ghost" style={{ fontSize: 12, padding: "8px 12px" }} onClick={onEditMe}>
@@ -124,9 +131,13 @@ function LobbyScreen({ roomCode, players, me, onLeave, onStart, onEditMe }) {
       </div>
 
       <div className="row" style={{ justifyContent: "center", marginTop: 10 }}>
-        <button className="btn btn-primary" disabled={!ready} onClick={onStart}>
-          🚀 Lancer la partie {!ready && "(choisis un perso)"}
-        </button>
+        {isHost ? (
+          <button className="btn btn-primary" disabled={!ready} onClick={onStart}>
+            🚀 Lancer la partie {!ready && "(choisis un perso et une option)"}
+          </button>
+        ) : (
+          <div className="mono muted">En attente de l'hôte…</div>
+        )}
       </div>
     </div>
   );
@@ -134,11 +145,10 @@ function LobbyScreen({ roomCode, players, me, onLeave, onStart, onEditMe }) {
 
 function CharacterPickScreen({ me, players, onConfirm, onBack }) {
   const [charId, setCharId] = useStateH(me.characterId || null);
-  const [tags, setTags] = useStateH(me.tags || []);
+  const [gender, setGender] = useStateH(me.gender || null);
   const [name, setName] = useStateH(me.name || "Toi");
 
   const takenIds = new Set(players.filter(p => p.id !== me.id).map(p => p.characterId).filter(Boolean));
-  const selected = window.CHARACTERS.find(c => c.id === charId);
 
   return (
     <div className="screen">
@@ -155,12 +165,10 @@ function CharacterPickScreen({ me, players, onConfirm, onBack }) {
           className="code-box"
           style={{ width: "100%", height: 44, textTransform: "none", fontSize: 18, textAlign: "left", padding: "0 14px" }}
         />
-        <div className="panel-title" style={{ marginTop: 14 }}>Qui bois-tu comme ?</div>
-        <div className="tag-group">
-          <TagSelector value={tags} onChange={setTags} />
-        </div>
+        <div className="panel-title" style={{ marginTop: 14 }}>Tu es…</div>
+        <GenderSelector value={gender} onChange={setGender} />
         <div className="mono muted" style={{ fontSize: 10, marginTop: 6 }}>
-          Cela détermine les cases qui te ciblent (banane = symbole des cases 19, 44 — pêche = symbole des cases 29, 46).
+          🍌 Homme · cases 19, 44 te ciblent. 🍑 Femme · cases 29, 46 te ciblent.
         </div>
       </div>
 
@@ -180,9 +188,7 @@ function CharacterPickScreen({ me, players, onConfirm, onBack }) {
             >
               <div className="char-emoji">{c.emoji}</div>
               <div className="char-name">{c.name}</div>
-              <div className="char-family">Famille : {c.family}</div>
-              <div className="char-power-title" style={{ color: c.palette.accent }}>⚡ {c.power}</div>
-              <div className="char-power-desc">{c.power_desc}</div>
+              <div className="char-family">Famille · {c.family}</div>
               <div className="char-flavor">« {c.flavor} »</div>
               {taken && (
                 <div style={{ position: "absolute", top: 10, right: 10 }} className="mono">Pris</div>
@@ -195,8 +201,8 @@ function CharacterPickScreen({ me, players, onConfirm, onBack }) {
       <div className="row" style={{ justifyContent: "center" }}>
         <button
           className="btn btn-primary"
-          disabled={!charId || !name.trim()}
-          onClick={() => onConfirm({ characterId: charId, tags, name: name.trim() || "Joueur" })}
+          disabled={!charId || !gender || !name.trim()}
+          onClick={() => onConfirm({ characterId: charId, gender, name: name.trim() || "Joueur" })}
         >
           Valider
         </button>

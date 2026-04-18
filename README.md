@@ -40,7 +40,8 @@ data/
   cases.js              # 60 cases avec catégories/icônes/descriptions
   characters.js         # 16 archétypes d'alcool
 components/
-  ui.jsx                # Dice, Avatar, Toast, Confetti, TagSelector
+  ui.jsx                # Dice, Avatar, Toast, Confetti, GenderSelector
+  net.jsx               # multijoueur PeerJS (host/guest, broker public)
   screens.jsx           # Home, Lobby, CharacterPick
   extra_screens.jsx     # Rules, HostSetup, TurnIntro, modals, EndStats
   board.jsx             # plateau serpentin 6x10
@@ -54,8 +55,20 @@ components/
 - Rôles persistants · Roi des questions, Reine, Valet des pouces.
 - Les bots jouent automatiquement pour tester le flow complet.
 
+## Multijoueur
+
+- P2P via [PeerJS](https://peerjs.com) · broker public, aucun backend requis.
+- L'hôte crée la partie et obtient un code à 6 caractères. Les joueurs tapent ce code pour rejoindre.
+- L'hôte est autoritatif · il applique les actions (dé, cases, modals) et re-broadcaste l'état complet à tous.
+- Les guests envoient des actions RPC (`rollDice`, `closeModal`, `pickCupidon`, `giveSips`).
+- Chacun ne peut agir que sur son propre tour / ses propres modals.
+
+## Question homme/femme
+
+À l'écran de choix de perso, chaque joueur déclare `homme` (🍌) ou `femme` (🍑). Les cases 19/44 ciblent les hommes, les cases 29/46 ciblent les femmes.
+
 ## À faire
 
-- Multijoueur réel (WebRTC ou serveur) · le code de partie est cosmétique pour l'instant
 - Jokers utilisables depuis l'UI en cours de tour
-- Auto-ciblage banane/pêche dans les modals de boisson
+- Reconnexion guest après perte de connexion
+- Host migration si l'hôte quitte

@@ -89,28 +89,25 @@ function Confetti({ active }) {
   );
 }
 
-// --- Tag selector (banane / pêche) ---
-function TagSelector({ value, onChange }) {
-  const tags = [
-    { id: "banana", label: "🍌 Banane" },
-    { id: "peach",  label: "🍑 Pêche" },
+// --- Gender selector (homme / femme) ---
+function GenderSelector({ value, onChange }) {
+  const opts = [
+    { id: "homme", label: "🍌 Homme" },
+    { id: "femme", label: "🍑 Femme" },
   ];
-  function toggle(id) {
-    const next = new Set(value || []);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    onChange([...next]);
-  }
   return (
     <div className="tag-group">
-      {tags.map(t => (
-        <button key={t.id}
-          className={"tag" + (value.includes(t.id) ? " active" : "")}
-          onClick={() => toggle(t.id)}>
-          {t.label}
+      {opts.map(o => (
+        <button key={o.id}
+          className={"tag" + (value === o.id ? " active" : "")}
+          onClick={() => onChange(o.id)}>
+          {o.label}
         </button>
       ))}
     </div>
   );
 }
 
-Object.assign(window, { Dice, Avatar, Toast, Confetti, TagSelector });
+function genderIcon(g) { return g === "homme" ? "🍌" : g === "femme" ? "🍑" : ""; }
+
+Object.assign(window, { Dice, Avatar, Toast, Confetti, GenderSelector, genderIcon });

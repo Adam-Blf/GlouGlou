@@ -1,4 +1,4 @@
-// GlouGlou! - Main App with full screens flow
+// GlouGlou! - App avec multijoueur pair-à-pair (PeerJS)
 
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -8,15 +8,9 @@ function genRoomCode() {
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
-
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "palette": "neon",
-  "boardSize": 1,
-  "turnIntro": true
-}/*EDITMODE-END*/;
-
+const TWEAK_DEFAULTS = { palette: "neon", boardSize: 1, turnIntro: true };
 const PALETTES = {
   neon:   { "--neon": "#ff2e9a", "--neon-2": "#c4ff4d", "--neon-3": "#8b5cff" },
   sunset: { "--neon": "#ff6e6e", "--neon-2": "#ffb347", "--neon-3": "#ff2e9a" },
@@ -33,98 +27,225 @@ function useTweaks() {
   return [t, setT];
 }
 
+function replaceOrAdd(rs, role, playerId) {
+  return [...rs.filter((r) => r.role !== role), { role, playerId }];
+}
+function categoryLabel(cat) {
+  return ({
+    drink: "BOIRE", give: "DONNER / PRENDRE", role: "RÔLE", action: "ACTION",
+    water: "RÉPIT", special: "SPÉCIAL", party: "TOURNÉE", target: "CIBLÉ",
+    start: "DÉPART", finish: "ARRIVÉE",
+  })[cat] || cat.toUpperCase();
+}
+
 function App() {
-  // screens: home | hostSetup | pickChar | lobby | rules | game | end
-  const [screen, setScreen] = useState("home");
+  // Multiplayer mode
+  const [mpMode, setMpMode] = useState("off");        // "off" | "host" | "guest"
+  const [pendingJoinCode, setPendingJoinCode] = useState(null);
+
+  // Local UI state (not replicated)
+  const [screen, setScreen] = useState("home");       // home | hostSetup | pickChar | lobby | rules | game | end
+  const [tweaks, setTweaks] = useTweaks();
+  const [toast, setToast] = useState(null);
+  const [confetti, setConfetti] = useState(false);
+  const [inspectCase, setInspectCase] = useState(null);
+  const [pauseOpen, setPauseOpen] = useState(false);
+
+  // Me (local identity)
+  const meIdRef = useRef(uid());
+  const [me, setMe] = useState(() => ({
+    id: meIdRef.current, name: "Toi", characterId: null, gender: null,
+    position: 0, jokers: 0, isHost: false,
+  }));
+
+  // Game state (replicated host → guests)
   const [roomCode, setRoomCode] = useState(null);
   const [gameConfig, setGameConfig] = useState({ intensity: "normale", variant: "classique", maxPlayers: 10 });
-  const [tweaks, setTweaks] = useTweaks();
-  const [editMode, setEditMode] = useState(false);
-  const [showRulesFirst, setShowRulesFirst] = useState(false);
-
-  const [me, setMe] = useState(() => ({
-    id: uid(), name: "Toi", characterId: null, tags: [],
-    position: 0, jokers: 0, isHost: true,
-  }));
   const [players, setPlayers] = useState([]);
-
   const [turnIdx, setTurnIdx] = useState(0);
   const [dice, setDice] = useState(null);
   const [rolling, setRolling] = useState(false);
   const [activeCaseModal, setActiveCaseModal] = useState(null);
-  const [toast, setToast] = useState(null);
-  const [confetti, setConfetti] = useState(false);
-  const [inspectCase, setInspectCase] = useState(null);
   const [winner, setWinner] = useState(null);
   const [history, setHistory] = useState({ sips: {} });
-
-  // Sub-flows
   const [showTurnIntro, setShowTurnIntro] = useState(false);
-  const [cupidonOpen, setCupidonOpen] = useState(null); // {playerId}
-  const [giveModal, setGiveModal] = useState(null); // {playerId, total}
-  const [shotSplash, setShotSplash] = useState(null); // {label}
-  const [pauseOpen, setPauseOpen] = useState(false);
-  const [cupidLinks, setCupidLinks] = useState([]); // [{a,b}]
-  const [activeRoles, setActiveRoles] = useState([]); // [{role, playerId}]
+  const [cupidonOpen, setCupidonOpen] = useState(null);
+  const [giveModal, setGiveModal] = useState(null);
+  const [shotSplash, setShotSplash] = useState(null);
+  const [cupidLinks, setCupidLinks] = useState([]);
+  const [activeRoles, setActiveRoles] = useState([]);
 
+  // Toast bridge for net.jsx
   useEffect(() => {
-    function onMsg(ev) {
-      const m = ev.data;
-      if (!m || typeof m !== "object") return;
-      if (m.type === "__activate_edit_mode") setEditMode(true);
-      else if (m.type === "__deactivate_edit_mode") setEditMode(false);
-    }
-    window.addEventListener("message", onMsg);
-    window.parent.postMessage({ type: "__edit_mode_available" }, "*");
-    return () => window.removeEventListener("message", onMsg);
+    window.__glouglouToast = (text) => setToast({ text, id: Date.now() });
+    return () => { window.__glouglouToast = null; };
   }, []);
-
-  function setTweakKey(k, v) {
-    const next = { ...tweaks, [k]: v };
-    setTweaks(next);
-    window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { [k]: v } }, "*");
-  }
 
   function showToast(text) { setToast({ text, id: Date.now() }); }
 
-  function addSips(playerId, n) {
-    setHistory(h => ({ ...h, sips: { ...h.sips, [playerId]: (h.sips[playerId] || 0) + n } }));
+  // ---- Multiplayer wiring -----------------------------------------
+  const mp = window.useMultiplayer({
+    mode: mpMode, code: roomCode,
+    onStateReceived: (s) => {
+      // Guest overwrite. Use `phase` (lobby/rules/game/end) to avoid yanking guest out of pickChar.
+      if (s.phase && s.phase !== screen) setScreen(s.phase);
+      if (s.players !== undefined) setPlayers(s.players);
+      if (s.turnIdx !== undefined) setTurnIdx(s.turnIdx);
+      if (s.dice !== undefined) setDice(s.dice);
+      if (s.rolling !== undefined) setRolling(s.rolling);
+      if (s.activeCaseModal !== undefined) setActiveCaseModal(s.activeCaseModal);
+      if (s.showTurnIntro !== undefined) setShowTurnIntro(s.showTurnIntro);
+      if (s.cupidonOpen !== undefined) setCupidonOpen(s.cupidonOpen);
+      if (s.giveModal !== undefined) setGiveModal(s.giveModal);
+      if (s.shotSplash !== undefined) setShotSplash(s.shotSplash);
+      if (s.cupidLinks !== undefined) setCupidLinks(s.cupidLinks);
+      if (s.activeRoles !== undefined) setActiveRoles(s.activeRoles);
+      if (s.history !== undefined) setHistory(s.history);
+      if (s.winner !== undefined) setWinner(s.winner);
+      if (s.gameConfig !== undefined) setGameConfig(s.gameConfig);
+      // Update my own copy if host sent it back
+      if (s.players) {
+        const mine = s.players.find((p) => p.id === meIdRef.current);
+        if (mine) setMe((prev) => ({ ...prev, ...mine }));
+      }
+    },
+    onJoinRequested: (peerId, incomingMe) => {
+      if (!incomingMe) return;
+      setPlayers((prev) => {
+        const exists = prev.find((p) => p.id === incomingMe.id);
+        if (exists) {
+          return prev.map((p) => p.id === incomingMe.id ? { ...p, name: incomingMe.name, characterId: incomingMe.characterId, gender: incomingMe.gender } : p);
+        }
+        showToast(`${incomingMe.name || "Un joueur"} a rejoint`);
+        return [...prev, { ...incomingMe, position: 0, jokers: 0, isHost: false }];
+      });
+    },
+    onActionReceived: (peerId, action) => {
+      if (!action || typeof action !== "object") return;
+      handleAction(action);
+    },
+  });
+
+  // Host state snapshot for broadcast. `phase` = lobby/rules/game/end (filtered from screen).
+  const phase = ["lobby", "rules", "game", "end"].includes(screen) ? screen : null;
+  const stateSnapshot = useMemo(() => ({
+    phase, players, turnIdx, dice, rolling,
+    activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash,
+    cupidLinks, activeRoles, history, winner, gameConfig,
+  }), [phase, players, turnIdx, dice, rolling, activeCaseModal, showTurnIntro, cupidonOpen, giveModal, shotSplash, cupidLinks, activeRoles, history, winner, gameConfig]);
+
+  useEffect(() => {
+    if (mpMode !== "host") return;
+    if (mp.status !== "ready") return;
+    mp.broadcast({ type: "state", payload: stateSnapshot });
+  }, [mpMode, mp.status, stateSnapshot]);
+
+  // When connection opens as guest, send my identity
+  useEffect(() => {
+    if (mpMode !== "guest" || mp.status !== "ready") return;
+    mp.sendToHost({ type: "join", me: { id: meIdRef.current, name: me.name, characterId: me.characterId, gender: me.gender } });
+  }, [mpMode, mp.status, me.characterId, me.gender, me.name]);
+
+  // Guest-visible MP error → bring back to home
+  useEffect(() => {
+    if (mp.error) showToast(mp.error);
+  }, [mp.error]);
+
+  // ---- Action router ---------------------------------------------
+  // Actions are things that can change replicated state. In guest mode they get sent to host.
+  // In host/local mode they execute directly.
+  function dispatch(type, args) {
+    if (mpMode === "guest") {
+      mp.sendToHost({ type: "action", action: { type, args } });
+      return;
+    }
+    handleAction({ type, args });
   }
 
-  function createRoom() {
-    setScreen("hostSetup");
+  function handleAction({ type, args }) {
+    switch (type) {
+      case "updatePlayer": {
+        const { id, patch } = args;
+        setPlayers((ps) => ps.map((p) => p.id === id ? { ...p, ...patch } : p));
+        break;
+      }
+      case "addPlayer": {
+        setPlayers((ps) => ps.find((p) => p.id === args.player.id) ? ps : [...ps, args.player]);
+        break;
+      }
+      case "removePlayer": {
+        setPlayers((ps) => ps.filter((p) => p.id !== args.id));
+        break;
+      }
+      case "setScreen":       setScreen(args.screen); break;
+      case "setGameConfig":   setGameConfig(args.config); break;
+      case "startGame":       startGame(); break;
+      case "rollDice":        rollDice(args?.playerId); break;
+      case "closeModal":      closeModalAndNext(); break;
+      case "pickCupidon":     onCupidChoose(args.partnerId); break;
+      case "giveSips":        onGiveDone(args.dist); break;
+      default: break;
+    }
   }
-  function onHostSetupConfirm(cfg) {
-    setGameConfig(cfg);
+
+  // ---- Screen transitions / setup -------------------------------
+  function createRoom() {
     const code = genRoomCode();
     setRoomCode(code);
-    const bots = [
-      { id: uid(), name: "Léa",     characterId: "rose",    tags: ["peach"],  position: 0, jokers: 0, isBot: true },
-      { id: uid(), name: "Mathias", characterId: "gin",     tags: ["banana"], position: 0, jokers: 0, isBot: true },
-      { id: uid(), name: "Sofia",   characterId: "tequila", tags: ["peach"],  position: 0, jokers: 0, isBot: true },
-      { id: uid(), name: "Karim",   characterId: "cerf",    tags: ["banana"], position: 0, jokers: 0, isBot: true },
-    ];
-    setPlayers([{ ...me }, ...bots]);
+    setMpMode("host");
+    setMe((m) => ({ ...m, isHost: true }));
+    setPlayers([{ ...me, isHost: true }]);
+    setScreen("hostSetup");
+  }
+
+  function onHostSetupConfirm(cfg) {
+    setGameConfig(cfg);
     setScreen("pickChar");
   }
+
   function joinRoom(code) {
-    setRoomCode(code);
-    const others = [
-      { id: uid(), name: "Hôte",  characterId: "champagne", tags: ["peach"],  position: 0, jokers: 0, isBot: true, isHost: true },
-      { id: uid(), name: "Timo",  characterId: "beer",      tags: ["banana"], position: 0, jokers: 0, isBot: true },
-      { id: uid(), name: "Alix",  characterId: "vodka",     tags: [],         position: 0, jokers: 0, isBot: true },
-    ];
-    setPlayers([{ ...me, isHost: false }, ...others]);
-    setMe(m => ({ ...m, isHost: false }));
+    if (!code || code.length < 4) return;
+    setRoomCode(code.toUpperCase());
+    setMpMode("guest");
+    setMe((m) => ({ ...m, isHost: false }));
     setScreen("pickChar");
   }
-  function onConfirmChar({ characterId, tags, name }) {
-    const updatedMe = { ...me, characterId, tags, name };
-    setMe(updatedMe);
-    setPlayers(ps => ps.map(p => p.id === me.id ? updatedMe : p));
+
+  function onConfirmChar({ characterId, gender, name }) {
+    const updated = { ...me, characterId, gender, name };
+    setMe(updated);
+    if (mpMode === "guest") {
+      // Tell host about my identity update; host will add me to its roster
+      mp.sendToHost({ type: "join", me: { id: meIdRef.current, name, characterId, gender } });
+    } else {
+      // Host or local: update my player entry
+      setPlayers((ps) => {
+        const exists = ps.find((p) => p.id === meIdRef.current);
+        if (exists) return ps.map((p) => p.id === meIdRef.current ? { ...p, name, characterId, gender } : p);
+        return [...ps, { ...updated, position: 0, jokers: 0, isHost: true }];
+      });
+    }
     setScreen("lobby");
   }
 
+  function leaveRoom() {
+    setMpMode("off");
+    setPlayers([]);
+    setRoomCode(null);
+    setWinner(null);
+    setDice(null);
+    setTurnIdx(0);
+    setActiveCaseModal(null);
+    setShotSplash(null);
+    setCupidonOpen(null);
+    setGiveModal(null);
+    setCupidLinks([]);
+    setActiveRoles([]);
+    setHistory({ sips: {} });
+    setScreen("home");
+  }
+
+  // ---- Game lifecycle (host only; guests get state replicated) --
   function startGame() {
     setTurnIdx(0);
     setDice(null);
@@ -132,58 +253,60 @@ function App() {
     setCupidLinks([]);
     setActiveRoles([]);
     setHistory({ sips: {} });
-    setShowRulesFirst(true);
+    setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 })));
     setScreen("rules");
   }
+
   function rulesDone() {
-    setShowRulesFirst(false);
+    if (mpMode === "guest") { mp.sendToHost({ type: "action", action: { type: "setScreen", args: { screen: "game" } } }); return; }
     setScreen("game");
     if (tweaks.turnIntro) setShowTurnIntro(true);
   }
 
-  function rollDice() {
+  function rollDice(playerIdArg) {
     if (rolling || activeCaseModal || winner || shotSplash || showTurnIntro || cupidonOpen || giveModal || pauseOpen) return;
     setRolling(true);
     const target = 1 + Math.floor(Math.random() * 6);
     setTimeout(() => {
       setDice(target);
       setRolling(false);
-      advanceCurrentPlayer(target);
+      const pid = playerIdArg || players[turnIdx]?.id;
+      if (pid) advancePlayer(pid, target);
     }, 900);
   }
 
   function movePlayer(playerId, newPos) {
-    setPlayers(ps => ps.map(p => p.id === playerId ? { ...p, position: newPos } : p));
+    setPlayers((ps) => ps.map((p) => p.id === playerId ? { ...p, position: newPos } : p));
   }
 
-  function advanceCurrentPlayer(steps) {
-    const current = players[turnIdx];
-    const newPos = Math.min(60, current.position + steps);
+  function advancePlayer(playerId, steps) {
+    const current = players.find((p) => p.id === playerId);
+    if (!current) return;
+    const target = Math.min(60, current.position + steps);
     let pos = current.position;
     const step = () => {
       pos += 1;
-      movePlayer(current.id, pos);
-      if (pos < newPos) setTimeout(step, 140);
-      else setTimeout(() => triggerCase(current.id, newPos), 300);
+      movePlayer(playerId, pos);
+      if (pos < target) setTimeout(step, 140);
+      else setTimeout(() => triggerCase(playerId, target), 300);
     };
-    if (pos < newPos) setTimeout(step, 140);
-    else triggerCase(current.id, newPos);
+    if (pos < target) setTimeout(step, 140);
+    else triggerCase(playerId, target);
   }
 
   function triggerCase(playerId, caseNum) {
     const c = window.CASES[caseNum];
     if (!c) return;
     if (caseNum === 60) {
-      setWinner(players.find(p => p.id === playerId));
+      setWinner(players.find((p) => p.id === playerId));
       setConfetti(true);
       setTimeout(() => setConfetti(false), 1400);
       setActiveCaseModal({ caseNum, playerId });
       return;
     }
     if (caseNum === 2) {
-      setPlayers(ps => ps.map(p => p.id === playerId ? { ...p, jokers: p.jokers + 1 } : p));
+      setPlayers((ps) => ps.map((p) => p.id === playerId ? { ...p, jokers: p.jokers + 1 } : p));
     }
-    // Shot splashes for dramatic cases
     if ([6, 21, 33, 45, 58].includes(caseNum)) {
       setShotSplash({ label: caseNum === 58 ? "DOUBLE SHOT !" : "SHOT !" });
     } else if (caseNum === 13 || caseNum === 59) {
@@ -191,22 +314,14 @@ function App() {
     } else if (caseNum === 37) {
       setShotSplash({ label: "PINTE DU ROI" });
     }
-
-    // Role tracking
-    if (caseNum === 24 || caseNum === 42) {
-      setActiveRoles(rs => replaceOrAdd(rs, "Roi des questions", playerId));
-    } else if (caseNum === 25 || caseNum === 40) {
-      setActiveRoles(rs => replaceOrAdd(rs, "Reine des p***s", playerId));
-    } else if (caseNum === 26 || caseNum === 41) {
-      setActiveRoles(rs => replaceOrAdd(rs, "Valet des pouces", playerId));
-    }
-
+    if (caseNum === 24 || caseNum === 42) setActiveRoles((rs) => replaceOrAdd(rs, "Roi des questions", playerId));
+    else if (caseNum === 25 || caseNum === 40) setActiveRoles((rs) => replaceOrAdd(rs, "Reine des p***s", playerId));
+    else if (caseNum === 26 || caseNum === 41) setActiveRoles((rs) => replaceOrAdd(rs, "Valet des pouces", playerId));
     setActiveCaseModal({ caseNum, playerId });
   }
 
-  function replaceOrAdd(rs, role, playerId) {
-    const filtered = rs.filter(r => r.role !== role);
-    return [...filtered, { role, playerId }];
+  function addSips(playerId, n) {
+    setHistory((h) => ({ ...h, sips: { ...h.sips, [playerId]: (h.sips[playerId] || 0) + n } }));
   }
 
   function closeModalAndNext() {
@@ -214,28 +329,20 @@ function App() {
     setActiveCaseModal(null);
     if (!meta) { nextTurn(); return; }
     const { caseNum, playerId } = meta;
-
-    // Give/take sip tracking
     const c = window.CASES[caseNum];
     if (c.cat === "drink") addSips(playerId, 3);
     if (caseNum === 8) addSips(playerId, 5);
     if (caseNum === 16) addSips(playerId, 6);
     if (caseNum === 31 || caseNum === 43) addSips(playerId, 5);
 
-    // Sub-modals
-    if (caseNum === 4) {
-      setCupidonOpen({ playerId });
-      return;
-    }
+    if (caseNum === 4) { setCupidonOpen({ playerId }); return; }
     if ([7, 15, 30, 49].includes(caseNum)) {
-      const others = players.filter(p => p.id !== playerId);
+      const others = players.filter((p) => p.id !== playerId);
       setGiveModal({ playerId, total: 5, others });
       return;
     }
-
-    // Chained effects
     if (caseNum === 3) {
-      const p = getPlayer(playerId);
+      const p = players.find((x) => x.id === playerId);
       const newPos = Math.min(60, (p?.position || 0) + 3);
       movePlayer(playerId, newPos);
       setTimeout(() => triggerCase(playerId, newPos), 500);
@@ -247,21 +354,21 @@ function App() {
       return;
     }
     if (caseNum === 50) {
-      const p = getPlayer(playerId);
+      const p = players.find((x) => x.id === playerId);
       const newPos = Math.max(1, (p?.position || 1) - 1);
       movePlayer(playerId, newPos);
       setTimeout(() => triggerCase(playerId, newPos), 500);
       return;
     }
     if (caseNum === 53) {
-      const p = getPlayer(playerId);
+      const p = players.find((x) => x.id === playerId);
       const newPos = Math.max(1, (p?.position || 1) - 3);
       movePlayer(playerId, newPos);
       setTimeout(() => triggerCase(playerId, newPos), 500);
       return;
     }
     if (caseNum === 56) {
-      const p = getPlayer(playerId);
+      const p = players.find((x) => x.id === playerId);
       const cur = p?.position || 1;
       const newPos = 1 + Math.floor(Math.random() * Math.max(1, cur - 1));
       movePlayer(playerId, newPos);
@@ -269,7 +376,7 @@ function App() {
       return;
     }
     if (caseNum === 57) {
-      const others = players.filter(p => p.id !== playerId);
+      const others = players.filter((p) => p.id !== playerId);
       const victim = others[Math.floor(Math.random() * others.length)];
       if (victim) {
         let target = 1 + Math.floor(Math.random() * 59);
@@ -285,9 +392,10 @@ function App() {
   }
 
   function onCupidChoose(partnerId) {
-    const pid = cupidonOpen.playerId;
-    setCupidLinks(l => [...l, { a: pid, b: partnerId }]);
-    showToast(`💘 Lien scellé !`);
+    const pid = cupidonOpen?.playerId;
+    if (!pid) return;
+    setCupidLinks((l) => [...l, { a: pid, b: partnerId }]);
+    showToast("💘 Lien scellé !");
     setCupidonOpen(null);
     nextTurn();
   }
@@ -298,60 +406,57 @@ function App() {
     nextTurn();
   }
 
-  function getPlayer(id) { return players.find(p => p.id === id); }
-
   function nextTurn() {
     if (winner) return;
-    setTurnIdx(idx => {
-      const next = (idx + 1) % players.length;
-      if (tweaks.turnIntro) setShowTurnIntro(true);
-      return next;
-    });
+    setTurnIdx((idx) => (idx + 1) % Math.max(1, players.length));
     setDice(null);
+    if (tweaks.turnIntro) setShowTurnIntro(true);
   }
 
+  // Transition to end screen (host)
   useEffect(() => {
-    if (screen !== "game") return;
-    if (winner || activeCaseModal || rolling || shotSplash || showTurnIntro || cupidonOpen || giveModal || pauseOpen) return;
-    const cur = players[turnIdx];
-    if (!cur || !cur.isBot) return;
-    const id = setTimeout(() => rollDice(), 900);
-    return () => clearTimeout(id);
-  }, [screen, turnIdx, activeCaseModal, rolling, winner, shotSplash, showTurnIntro, cupidonOpen, giveModal, pauseOpen]);
-
-  const currentPlayer = players[turnIdx];
-  const currentChar = currentPlayer && window.CHARACTERS.find(c => c.id === currentPlayer.characterId);
-
-  // Transition to end screen
-  useEffect(() => {
+    if (mpMode === "guest") return;
     if (winner && !activeCaseModal) {
       const id = setTimeout(() => setScreen("end"), 800);
       return () => clearTimeout(id);
     }
-  }, [winner, activeCaseModal]);
+  }, [winner, activeCaseModal, mpMode]);
 
+  // ---- Derived ---------------------------------------------------
+  const currentPlayer = players[turnIdx];
+  const currentChar = currentPlayer && window.CHARACTERS.find((c) => c.id === currentPlayer.characterId);
+  const amCurrent = currentPlayer?.id === meIdRef.current;
+  const canAct = mpMode !== "guest" ? true : amCurrent;
+
+  // ---- Render ----------------------------------------------------
   return (
     <div className="app">
       <div className="bg-grid" />
       <div className="bg-blobs" />
 
-      {screen === "home" && <HomeScreen onCreate={createRoom} onJoin={joinRoom} />}
-      {screen === "hostSetup" && <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => setScreen("home")} />}
+      {screen === "home" && (
+        <HomeScreen onCreate={createRoom} onJoin={joinRoom} />
+      )}
+      {screen === "hostSetup" && (
+        <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => { leaveRoom(); }} />
+      )}
       {screen === "pickChar" && (
         <CharacterPickScreen me={me} players={players}
-          onConfirm={onConfirmChar} onBack={() => setScreen(roomCode ? "lobby" : "home")} />
+          onConfirm={onConfirmChar}
+          onBack={() => setScreen(roomCode ? "lobby" : "home")} />
       )}
       {screen === "lobby" && (
         <LobbyScreen roomCode={roomCode} players={players} me={me}
-          onLeave={() => setScreen("home")}
-          onStart={startGame}
+          mpStatus={mp.status} mpMode={mpMode}
+          onLeave={leaveRoom}
+          onStart={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "startGame" } }); else startGame(); }}
           onEditMe={() => setScreen("pickChar")} />
       )}
       {screen === "rules" && <RulesScreen onDone={rulesDone} />}
       {screen === "end" && (
         <EndStatsScreen winner={winner} players={players} history={history}
-          onReplay={() => { setScreen("lobby"); setPlayers(ps => ps.map(p => ({ ...p, position: 0, jokers: 0 }))); setWinner(null); setActiveRoles([]); setCupidLinks([]); }}
-          onHome={() => { setScreen("home"); setPlayers([]); setRoomCode(null); setWinner(null); }} />
+          onReplay={() => { setScreen("lobby"); setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 }))); setWinner(null); setActiveRoles([]); setCupidLinks([]); setHistory({ sips: {} }); }}
+          onHome={leaveRoom} />
       )}
 
       {screen === "game" && (
@@ -360,11 +465,9 @@ function App() {
             players={players}
             currentPlayerId={currentPlayer?.id}
             onCellClick={(n) => setInspectCase(n)}
-            highlightCell={currentPlayer?.position}
-          />
+            highlightCell={currentPlayer?.position} />
           <div className="side">
             {activeRoles.length > 0 && <ActiveRolesBar roles={activeRoles} players={players} />}
-
             <div className="panel">
               <div className="panel-title" style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Tour en cours</span>
@@ -374,28 +477,29 @@ function App() {
                 <Avatar character={currentChar} size={64} withGlow />
                 <div>
                   <div className="who">{currentPlayer?.name}</div>
-                  <div className="what">{currentChar?.family} • Case {currentPlayer?.position}</div>
+                  <div className="what">{currentChar?.family} · Case {currentPlayer?.position}</div>
                 </div>
               </div>
             </div>
 
             <div className="panel" style={{ padding: 0 }}>
-              <Dice value={dice} rolling={rolling} onRoll={rollDice}
-                disabled={currentPlayer?.isBot || !!activeCaseModal || !!winner}
-                cta={currentPlayer?.isBot ? `${currentPlayer.name} réfléchit…` : `Lancer le dé`} />
+              <Dice value={dice} rolling={rolling}
+                onRoll={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "rollDice", args: { playerId: currentPlayer?.id } } }); else rollDice(); }}
+                disabled={!canAct || !!activeCaseModal || !!winner}
+                cta={!canAct ? `${currentPlayer?.name || "…"} joue…` : "Lancer le dé"} />
             </div>
 
             <div className="panel">
               <div className="panel-title">Joueurs ({players.length})</div>
               <div className="mini-players">
                 {players.map((p, i) => {
-                  const ch = window.CHARACTERS.find(c => c.id === p.characterId);
+                  const ch = window.CHARACTERS.find((c) => c.id === p.characterId);
                   return (
                     <div key={p.id} className={"mini-player" + (i === turnIdx ? " is-turn" : "")}>
                       <Avatar character={ch} size={32} />
                       <div>
-                        <div style={{ fontWeight: 700 }}>{p.name}{p.id === me.id && <span className="mono muted" style={{ marginLeft: 4 }}>(toi)</span>}</div>
-                        <div className="mono muted" style={{ fontSize: 10 }}>{ch?.family} • {(history.sips[p.id] || 0)} 🍺</div>
+                        <div style={{ fontWeight: 700 }}>{p.name} {genderIcon(p.gender)}{p.id === meIdRef.current && <span className="mono muted" style={{ marginLeft: 4 }}>(toi)</span>}</div>
+                        <div className="mono muted" style={{ fontSize: 10 }}>{ch?.family} · {(history.sips[p.id] || 0)} 🍺</div>
                       </div>
                       {p.jokers > 0 && <span className="joker-badge">🃏×{p.jokers}</span>}
                       <div className="pos">#{p.position}</div>
@@ -410,7 +514,8 @@ function App() {
                 <div className="panel-title">Liens Cupidon 💘</div>
                 <div className="col" style={{ gap: 4, fontSize: 12 }}>
                   {cupidLinks.map((l, i) => {
-                    const a = getPlayer(l.a), b = getPlayer(l.b);
+                    const a = players.find((p) => p.id === l.a);
+                    const b = players.find((p) => p.id === l.b);
                     return <div key={i}>{a?.name} ↔ {b?.name}</div>;
                   })}
                 </div>
@@ -424,29 +529,32 @@ function App() {
         <TurnIntro player={currentPlayer} character={currentChar} onGo={() => setShowTurnIntro(false)} />
       )}
 
-      {shotSplash && <ShotSplash label={shotSplash.label} onDone={() => setShotSplash(null)} />}
+      {shotSplash && <ShotSplash label={shotSplash.label} onDone={() => { if (mpMode !== "guest") setShotSplash(null); }} />}
 
-      {cupidonOpen && (
-        <CupidonModal me={getPlayer(cupidonOpen.playerId)}
-          others={players.filter(p => p.id !== cupidonOpen.playerId)}
-          onChoose={onCupidChoose}
-          onCancel={() => { setCupidonOpen(null); nextTurn(); }} />
+      {cupidonOpen && cupidonOpen.playerId === meIdRef.current && (
+        <CupidonModal me={players.find((p) => p.id === cupidonOpen.playerId)}
+          others={players.filter((p) => p.id !== cupidonOpen.playerId)}
+          onChoose={(partnerId) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId } } }); else onCupidChoose(partnerId); }}
+          onCancel={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId: null } } }); else { setCupidonOpen(null); nextTurn(); } }} />
       )}
 
-      {giveModal && (
-        <GiveSipsModal total={giveModal.total} others={giveModal.others} onDone={onGiveDone} />
+      {giveModal && giveModal.playerId === meIdRef.current && (
+        <GiveSipsModal total={giveModal.total} others={giveModal.others}
+          onDone={(dist) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "giveSips", args: { dist } } }); else onGiveDone(dist); }} />
       )}
 
       {pauseOpen && (
         <PauseMenu onResume={() => setPauseOpen(false)}
-          onHome={() => { setPauseOpen(false); setScreen("home"); setPlayers([]); }}
+          onHome={() => { setPauseOpen(false); leaveRoom(); }}
           onRules={() => { setPauseOpen(false); setScreen("rules"); }} />
       )}
 
       {activeCaseModal && (
         <CaseModal caseData={window.CASES[activeCaseModal.caseNum]}
-          player={getPlayer(activeCaseModal.playerId)}
-          onClose={closeModalAndNext} isWin={activeCaseModal.caseNum === 60} />
+          player={players.find((p) => p.id === activeCaseModal.playerId)}
+          onClose={() => { if (mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
+          isWin={activeCaseModal.caseNum === 60}
+          readOnly={mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current} />
       )}
 
       {inspectCase != null && !activeCaseModal && (
@@ -456,52 +564,22 @@ function App() {
       {toast && <Toast key={toast.id} onDone={() => setToast(null)}>{toast.text}</Toast>}
       {confetti && <Confetti active />}
 
-      {editMode && (
-        <div className="tweaks">
-          <div className="panel-title" style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>Tweaks</span>
-            <button className="mono" style={{ fontSize: 10 }} onClick={() => setEditMode(false)}>×</button>
-          </div>
-          <div className="tweak-row">
-            <label>Palette</label>
-            <div className="swatches">
-              {Object.keys(PALETTES).map(k => {
-                const p = PALETTES[k];
-                return (
-                  <div key={k} className={"swatch" + (tweaks.palette === k ? " active" : "")}
-                    style={{ background: `linear-gradient(135deg, ${p["--neon"]}, ${p["--neon-3"]})` }}
-                    onClick={() => setTweakKey("palette", k)} title={k} />
-                );
-              })}
-            </div>
-          </div>
-          <div className="tweak-row">
-            <label>Intro de tour</label>
-            <input type="checkbox" checked={!!tweaks.turnIntro}
-              onChange={(e) => setTweakKey("turnIntro", e.target.checked)} />
-          </div>
-          <div className="tweak-row">
-            <label>Reset</label>
-            <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }}
-              onClick={() => { setScreen("home"); setPlayers([]); setWinner(null); setDice(null); setTurnIdx(0); }}>
-              ⟲ Accueil
-            </button>
-          </div>
-        </div>
+      {mp.status === "connecting" && screen !== "home" && (
+        <div className="toast" style={{ top: "auto", bottom: 16, borderColor: "var(--neon-5)" }}>Connexion…</div>
       )}
     </div>
   );
 }
 
-function CaseModal({ caseData, player, onClose, isWin, inspectOnly }) {
+function CaseModal({ caseData, player, onClose, isWin, inspectOnly, readOnly }) {
   if (!caseData) return null;
   const c = caseData;
-  const character = player && window.CHARACTERS.find(x => x.id === player.characterId);
+  const character = player && window.CHARACTERS.find((x) => x.id === player.characterId);
   return (
     <div className="backdrop" onClick={inspectOnly ? onClose : undefined}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header" style={{
-          background: `linear-gradient(180deg, var(--cat-${c.cat === 'start' ? 'water' : c.cat}, rgba(255,255,255,0.1)) 0%, transparent 100%)`,
+          background: `linear-gradient(180deg, var(--cat-${c.cat === "start" ? "water" : c.cat}, rgba(255,255,255,0.1)) 0%, transparent 100%)`,
         }}>
           <div className="icon-splash">{c.icon}</div>
           <div className="modal-cat">{categoryLabel(c.cat)}</div>
@@ -517,16 +595,18 @@ function CaseModal({ caseData, player, onClose, isWin, inspectOnly }) {
           )}
           <div>{c.desc}</div>
           {isWin && (
-            <div style={{
-              marginTop: 16, padding: 14, borderRadius: 12,
+            <div style={{ marginTop: 16, padding: 14, borderRadius: 12,
               background: "linear-gradient(90deg, var(--neon-4), var(--neon))",
-              color: "#fff", fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 22
-            }}>🏆 {player?.name} a gagné GlouGlou!</div>
+              color: "#fff", fontFamily: "var(--font-display)", fontStyle: "italic", fontSize: 22 }}>
+              🏆 {player?.name} a gagné GlouGlou!
+            </div>
           )}
         </div>
         <div className="modal-actions">
           {inspectOnly ? (
             <button className="btn btn-ghost" onClick={onClose}>Fermer</button>
+          ) : readOnly ? (
+            <div className="mono muted">En attente du joueur…</div>
           ) : (
             <button className="btn btn-primary" onClick={onClose}>
               {isWin ? "Célébrer 🎉" : "C'est bon, au suivant"}
@@ -536,14 +616,6 @@ function CaseModal({ caseData, player, onClose, isWin, inspectOnly }) {
       </div>
     </div>
   );
-}
-
-function categoryLabel(cat) {
-  return ({
-    drink: "BOIRE", give: "DONNER / PRENDRE", role: "RÔLE", action: "ACTION",
-    water: "RÉPIT", special: "SPÉCIAL", party: "TOURNÉE", target: "CIBLÉ",
-    start: "DÉPART", finish: "ARRIVÉE",
-  })[cat] || cat.toUpperCase();
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
