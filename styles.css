@@ -542,15 +542,13 @@ button:focus-visible {
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 12px;
 }
 .board-canvas {
   position: relative;
   width: 100%;
   max-width: 100%;
+  margin: 0 auto;
 }
 
 .cells-grid {
