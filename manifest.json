@@ -1,0 +1,21 @@
+{
+  "name": "GlouGlou!",
+  "short_name": "GlouGlou",
+  "description": "Le jeu de l'oie version apéro · 60 cases, 16 personnages, multijoueur par code.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0513",
+  "theme_color": "#ff2e9a",
+  "categories": ["games", "entertainment", "social"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

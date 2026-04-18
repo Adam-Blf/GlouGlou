@@ -1,0 +1,10 @@
+{
+  "name": "glouglou",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GlouGlou! · Le jeu de l'oie version apéro · PWA statique.",
+  "scripts": {
+    "dev": "npx --yes serve -l 5173 .",
+    "start": "npx --yes serve -l 5173 ."
+  }
+}
