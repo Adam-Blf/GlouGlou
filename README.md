@@ -2,6 +2,8 @@
 
 Le jeu de l'oie version apéro · 60 cases, 16 personnages, dé animé, système de code pour rejoindre une partie, installable en PWA.
 
+**Live** · https://glouglou-mu.vercel.app
+
 ## Stack
 
 - HTML + CSS pur (design system custom, palette néon)
