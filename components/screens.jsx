@@ -14,6 +14,15 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
     setCode(next);
   }
 
+  function handlePaste(e) {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const filled = ["", "", "", "", "", ""].map((_, i) => text[i] || "");
+    setCode(filled);
+    const focusIdx = Math.min(text.length, 5);
+    document.querySelectorAll(".code-box")[focusIdx]?.focus();
+  }
+
   function tryJoin() {
     const joined = code.join("");
     if (joined.length < 4) return;
@@ -59,7 +68,17 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
                 className="code-box"
                 value={c}
                 maxLength={1}
-                onChange={(e) => setCodeChar(i, e.target.value)}
+                inputMode="text"
+                autoCapitalize="characters"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={(e) => {
+                  setCodeChar(i, e.target.value);
+                  if (e.target.value && i < 5) {
+                    document.querySelectorAll(".code-box")[i + 1]?.focus();
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Backspace" && !c && i > 0) {
                     document.querySelectorAll(".code-box")[i - 1]?.focus();
@@ -67,6 +86,7 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
                     tryJoin();
                   }
                 }}
+                onPaste={handlePaste}
                 autoFocus={i === 0}
               />
             ))}

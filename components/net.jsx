@@ -45,7 +45,15 @@ function useMultiplayer({ mode, code, onStateReceived, onJoinRequested, onAction
     let destroyed = false;
 
     if (mode === "host") {
-      const peer = new window.Peer(peerIdFor(code), { debug: 1 });
+      const peer = new window.Peer(peerIdFor(code), {
+        debug: 0,
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+          ]
+        }
+      });
       peerRef.current = peer;
 
       peer.on("open", () => { if (!destroyed) { setStatus("ready"); cbRef.current.onConnectionStatus?.("ready"); } });
@@ -72,7 +80,15 @@ function useMultiplayer({ mode, code, onStateReceived, onJoinRequested, onAction
         conn.on("error", () => connsRef.current.delete(conn.peer));
       });
     } else if (mode === "guest") {
-      const peer = new window.Peer(undefined, { debug: 1 });
+      const peer = new window.Peer(undefined, {
+        debug: 0,
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+          ]
+        }
+      });
       peerRef.current = peer;
 
       peer.on("open", () => {
