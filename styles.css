@@ -1113,3 +1113,48 @@ button:focus-visible {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* -------- A11y · touch + reduced motion + hover only on hoverable devices -------- */
+/* No sticky hover state on touch devices (iOS/Android tap keeps :hover else) */
+@media (hover: none) {
+  .btn-primary:hover,
+  .btn-ghost:hover,
+  .btn-accent:hover,
+  .cell:hover,
+  .char-card:hover,
+  ::-webkit-scrollbar-thumb:hover {
+    transform: none;
+    background: inherit;
+  }
+  .btn-primary:hover { box-shadow: 0 4px 0 #a41465, 0 0 24px rgba(255,46,154,0.5); }
+  .btn-accent:hover  { box-shadow: 0 4px 0 #7ba51a, 0 0 24px rgba(196,255,77,0.5); }
+  .cell:hover        { box-shadow: none; z-index: auto; }
+}
+
+/* Honor user's motion preference · kill heavy animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .bg-blobs { display: none; }
+}
+
+/* Touch target minimum · bump small button padding to reach 44px on coarse pointers */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .code-box { min-height: 48px; min-width: 44px; }
+  .tag { min-height: 36px; padding: 8px 14px; }
+  .mini-player { min-height: 44px; }
+}
+
+/* Respect safe areas on iOS with the notch / bottom bar */
+.app {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.home-footer { padding-bottom: max(16px, env(safe-area-inset-bottom)); }

@@ -273,7 +273,11 @@ function App() {
     setScreen("lobby");
   }
 
-  function leaveRoom() {
+  function leaveRoom(opts) {
+    // Ask for confirmation if leaving mid-game (except when explicitly bypassed, e.g. after win)
+    if (!opts?.confirmed && ["game", "rules"].includes(screen) && !winner) {
+      if (!window.confirm("Quitter la partie en cours ? Ta progression sera perdue.")) return;
+    }
     clearSession();
     setSavedSession(null);
     setMpMode("off");
@@ -511,7 +515,7 @@ function App() {
       {screen === "end" && (
         <EndStatsScreen winner={winner} players={players} history={history}
           onReplay={() => { setScreen("lobby"); setPlayers((ps) => ps.map((p) => ({ ...p, position: 0, jokers: 0 }))); setWinner(null); setActiveRoles([]); setCupidLinks([]); setHistory({ sips: {} }); }}
-          onHome={leaveRoom} />
+          onHome={() => leaveRoom({ confirmed: true })} />
       )}
 
       {screen === "game" && (
@@ -526,7 +530,7 @@ function App() {
             <div className="panel">
               <div className="panel-title" style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Tour en cours</span>
-                <button onClick={() => setPauseOpen(true)} style={{ fontSize: 16, opacity: 0.6 }}>⏸</button>
+                <button onClick={() => setPauseOpen(true)} aria-label="Pause" title="Pause" style={{ fontSize: 16, opacity: 0.6, minWidth: 32, minHeight: 32 }}>⏸</button>
               </div>
               <div className="current-player">
                 <Avatar character={currentChar} size={64} withGlow />
