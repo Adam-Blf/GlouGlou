@@ -64,7 +64,7 @@ function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch (_
 
 function App() {
   // Multiplayer mode
-  const [mpMode, setMpMode] = useState("off");        // "off" | "host" | "guest"
+  const [mpMode, setMpMode] = useState("off");        // "off" | "host" | "guest" | "local"
   const [pendingJoinCode, setPendingJoinCode] = useState(null);
 
   // Local UI state (not replicated)
@@ -102,6 +102,8 @@ function App() {
   const [shotSplash, setShotSplash] = useState(null);
   const [cupidLinks, setCupidLinks] = useState([]);
   const [activeRoles, setActiveRoles] = useState([]);
+  const [showHandoff, setShowHandoff] = useState(false);
+  const [localPlayerDraft, setLocalPlayerDraft] = useState(null); // non-null when adding a local player
 
   // Toast bridge for net.jsx
   useEffect(() => {
@@ -229,6 +231,14 @@ function App() {
     setScreen("hostSetup");
   }
 
+  function createLocalRoom() {
+    window.SFX?.unlock();
+    setMpMode("local");
+    setPlayers([]);
+    setRoomCode(null);
+    setScreen("hostSetup");
+  }
+
   function onHostSetupConfirm(cfg) {
     setGameConfig(cfg);
     setScreen("pickChar");
@@ -258,6 +268,13 @@ function App() {
   }
 
   function onConfirmChar({ characterId, gender, name }) {
+    if (localPlayerDraft) {
+      const newPlayer = { ...localPlayerDraft, name, characterId, gender };
+      setPlayers((ps) => [...ps, newPlayer]);
+      setLocalPlayerDraft(null);
+      setScreen("lobby");
+      return;
+    }
     const updated = { ...me, characterId, gender, name };
     setMe(updated);
     saveSession({ role: mpMode === "host" ? "host" : "guest", code: roomCode, id: meIdRef.current, name, characterId, gender });
@@ -267,7 +284,7 @@ function App() {
       setPlayers((ps) => {
         const exists = ps.find((p) => p.id === meIdRef.current);
         if (exists) return ps.map((p) => p.id === meIdRef.current ? { ...p, name, characterId, gender } : p);
-        return [...ps, { ...updated, position: 0, jokers: 0, isHost: true }];
+        return [...ps, { ...updated, position: 0, jokers: 0, isHost: mpMode === "host" }];
       });
     }
     setScreen("lobby");
@@ -469,6 +486,10 @@ function App() {
     if (winner) return;
     setTurnIdx((idx) => (idx + 1) % Math.max(1, players.length));
     setDice(null);
+    if (mpMode === "local") {
+      setShowHandoff(true);
+      return;
+    }
     if (tweaks.turnIntro) { window.SFX?.turnIntro(); setShowTurnIntro(true); }
   }
 
@@ -494,22 +515,23 @@ function App() {
       <div className="bg-blobs" />
 
       {screen === "home" && (
-        <HomeScreen onCreate={createRoom} onJoin={joinRoom} onResume={resumeSession} savedSession={savedSession} />
+        <HomeScreen onCreate={createRoom} onCreateLocal={createLocalRoom} onJoin={joinRoom} onResume={resumeSession} savedSession={savedSession} />
       )}
       {screen === "hostSetup" && (
         <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => { leaveRoom(); }} />
       )}
       {screen === "pickChar" && (
-        <CharacterPickScreen me={me} players={players}
+        <CharacterPickScreen me={localPlayerDraft || me} players={players}
           onConfirm={onConfirmChar}
-          onBack={() => setScreen(roomCode ? "lobby" : "home")} />
+          onBack={() => { setLocalPlayerDraft(null); setScreen(localPlayerDraft || roomCode ? "lobby" : "home"); }} />
       )}
       {screen === "lobby" && (
         <LobbyScreen roomCode={roomCode} players={players} me={me}
           mpStatus={mp.status} mpMode={mpMode}
           onLeave={leaveRoom}
           onStart={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "startGame" } }); else startGame(); }}
-          onEditMe={() => setScreen("pickChar")} />
+          onEditMe={() => setScreen("pickChar")}
+          onAddLocalPlayer={() => { const newId = uid(); setLocalPlayerDraft({ id: newId, name: `Joueur ${players.length + 1}`, characterId: null, gender: null, position: 0, jokers: 0, isHost: false }); setScreen("pickChar"); }} />
       )}
       {screen === "rules" && <RulesScreen onDone={rulesDone} />}
       {screen === "end" && (
@@ -587,17 +609,21 @@ function App() {
       {showTurnIntro && currentPlayer && screen === "game" && (
         <TurnIntro player={currentPlayer} character={currentChar} onGo={() => setShowTurnIntro(false)} />
       )}
+      {showHandoff && mpMode === "local" && currentPlayer && screen === "game" && (
+        <HandoffScreen player={currentPlayer} character={currentChar}
+          onReady={() => { setShowHandoff(false); if (tweaks.turnIntro) { window.SFX?.turnIntro(); setShowTurnIntro(true); } }} />
+      )}
 
       {shotSplash && <ShotSplash label={shotSplash.label} onDone={() => { if (mpMode !== "guest") setShotSplash(null); }} />}
 
-      {cupidonOpen && cupidonOpen.playerId === meIdRef.current && (
+      {cupidonOpen && (mpMode === "local" || cupidonOpen.playerId === meIdRef.current) && (
         <CupidonModal me={players.find((p) => p.id === cupidonOpen.playerId)}
           others={players.filter((p) => p.id !== cupidonOpen.playerId)}
           onChoose={(partnerId) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId } } }); else onCupidChoose(partnerId); }}
           onCancel={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId: null } } }); else { setCupidonOpen(null); nextTurn(); } }} />
       )}
 
-      {giveModal && giveModal.playerId === meIdRef.current && (
+      {giveModal && (mpMode === "local" || giveModal.playerId === meIdRef.current) && (
         <GiveSipsModal total={giveModal.total} others={giveModal.others}
           onDone={(dist) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "giveSips", args: { dist } } }); else onGiveDone(dist); }} />
       )}
