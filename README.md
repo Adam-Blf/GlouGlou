@@ -72,3 +72,9 @@ components/
 - Jokers utilisables depuis l'UI en cours de tour
 - Reconnexion guest après perte de connexion
 - Host migration si l'hôte quitte
+
+---
+
+<p align="center">
+  <sub>Par <a href="https://adam.beloucif.com">Adam Beloucif</a> · Data Engineer & Fullstack Developer · <a href="https://github.com/Adam-Blf">GitHub</a> · <a href="https://www.linkedin.com/in/adambeloucif/">LinkedIn</a></sub>
+</p>
