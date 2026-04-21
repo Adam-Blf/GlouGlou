@@ -1,5 +1,11 @@
 # GlouGlou!
 
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
+![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![Vercel](https://img.shields.io/badge/deploy-Vercel-000?logo=vercel&logoColor=white)
+
 Le jeu de l'oie version apéro · 60 cases, 16 personnages, dé animé, système de code pour rejoindre une partie, installable en PWA.
 
 **Live** · https://glouglou-mu.vercel.app
