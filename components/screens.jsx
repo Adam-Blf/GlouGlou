@@ -2,7 +2,7 @@
 
 const { useState: useStateH } = React;
 
-function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
+function HomeScreen({ onCreate, onCreateSolo, onJoin, onResume, savedSession }) {
   const [mode, setMode] = useStateH("home"); // home | join
   const [code, setCode] = useStateH(["", "", "", "", "", ""]);
   const [muted, setMuted] = useStateH(() => window.SFX ? window.SFX.isMuted() : false);
@@ -32,8 +32,15 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
 
       {mode === "home" && (
         <div className="home-actions">
-          <button className="btn btn-primary" onClick={onCreate}>
-            🎲 Nouvelle partie
+          {onCreateSolo && (
+            <button className="btn btn-primary" onClick={onCreateSolo} style={{ flexBasis: "100%" }}>
+              🎲 Un seul écran · hotseat
+              <div className="mono muted" style={{ fontSize: 10, fontWeight: 500, marginTop: 2 }}>On se passe le téléphone</div>
+            </button>
+          )}
+          <button className="btn btn-accent" onClick={onCreate} style={{ flexBasis: "100%" }}>
+            📱 Plusieurs écrans · multi-joueurs
+            <div className="mono muted" style={{ fontSize: 10, fontWeight: 500, marginTop: 2 }}>Chacun sur son téléphone via un code</div>
           </button>
           <button className="btn btn-ghost" onClick={() => setMode("join")}>
             🔑 Rejoindre avec un code
@@ -86,13 +93,17 @@ function HomeScreen({ onCreate, onJoin, onResume, savedSession }) {
   );
 }
 
-function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart, onEditMe }) {
+function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart, onEditMe, onAddLocal, onRemoveLocal }) {
   function copyCode() {
     navigator.clipboard?.writeText(roomCode);
   }
-  const isHost = mpMode === "host";
-  const ready = players.length >= 1 && players.every(p => p.characterId && p.gender);
-  const label = mpStatus === "connecting"
+  const isSolo = mpMode === "off";
+  const isHost = mpMode === "host" || isSolo;
+  const minPlayers = isSolo ? 2 : 1;
+  const ready = players.length >= minPlayers && players.every(p => p.characterId && p.gender);
+  const label = isSolo
+    ? "Lobby · hotseat local"
+    : mpStatus === "connecting"
     ? "Connexion…"
     : mpStatus === "reconnecting"
     ? "Reconnexion en cours…"
@@ -108,11 +119,19 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
         <div className="pill">{label}</div>
       </div>
 
-      <div className="panel" style={{ textAlign: "center" }}>
-        <div className="mono muted">Code de la partie · partage-le</div>
-        <div className="room-code" onClick={copyCode} title="Cliquer pour copier">{roomCode}</div>
-        <div className="mono muted">{mpMode === "guest" ? "Attends que l'hôte lance" : "Cliquer pour copier"}</div>
-      </div>
+      {!isSolo && (
+        <div className="panel" style={{ textAlign: "center" }}>
+          <div className="mono muted">Code de la partie · partage-le</div>
+          <div className="room-code" onClick={copyCode} title="Cliquer pour copier">{roomCode}</div>
+          <div className="mono muted">{mpMode === "guest" ? "Attends que l'hôte lance" : "Cliquer pour copier"}</div>
+        </div>
+      )}
+      {isSolo && (
+        <div className="panel" style={{ textAlign: "center" }}>
+          <div className="mono muted">Mode hotseat · tous les joueurs sur ce téléphone</div>
+          <div className="mono muted" style={{ fontSize: 10, marginTop: 4 }}>Passe le tél au joueur actif à chaque tour</div>
+        </div>
+      )}
 
       <div className="col">
         <div className="mono muted">Joueurs ({players.length})</div>
@@ -136,16 +155,26 @@ function LobbyScreen({ roomCode, players, me, mpStatus, mpMode, onLeave, onStart
                     Modifier
                   </button>
                 )}
+                {isSolo && !isMe && onRemoveLocal && (
+                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: "8px 12px" }} onClick={() => onRemoveLocal(p.id)}>
+                    Retirer
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
+        {isSolo && onAddLocal && (
+          <button className="btn btn-ghost" onClick={onAddLocal} style={{ marginTop: 8 }}>
+            ➕ Ajouter un joueur
+          </button>
+        )}
       </div>
 
       <div className="row" style={{ justifyContent: "center", marginTop: 10 }}>
         {isHost ? (
           <button className="btn btn-primary" disabled={!ready} onClick={onStart}>
-            🚀 Lancer la partie {!ready && "(choisis un perso et une option)"}
+            🚀 Lancer la partie {!ready && (isSolo ? `(minimum ${minPlayers} joueurs)` : "(choisis un perso et une option)")}
           </button>
         ) : (
           <div className="mono muted">En attente de l'hôte…</div>

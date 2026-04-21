@@ -1,39 +1,39 @@
 /* GlouGlou! — Design system */
 
 :root {
-  /* Palette nocturne festive */
-  --ink: #0a0513;
-  --ink-2: #14092a;
-  --ink-3: #1d1140;
-  --paper: #fdf6ff;
-  --paper-dim: #efe3ff;
-  --line: rgba(255,255,255,0.14);
-  --line-strong: rgba(255,255,255,0.3);
+  /* Palette Cyber Rave — Quantum #91 adapté */
+  --ink:        #050510;
+  --ink-2:      #0d0820;
+  --ink-3:      #1a0f3a;
+  --paper:      #E0E0FF;
+  --paper-dim:  #b8b8e0;
+  --line:        rgba(224,224,255,0.14);
+  --line-strong: rgba(224,224,255,0.32);
 
-  /* Accents */
-  --neon: #ff2e9a;         /* magenta */
-  --neon-2: #c4ff4d;       /* lime */
-  --neon-3: #8b5cff;       /* violet */
-  --neon-4: #ffb347;       /* amber */
-  --neon-5: #5aeaff;       /* cyan */
+  /* Accents néon — saturation max */
+  --neon:    #FF00FF;   /* magenta pur (CTA primaire) */
+  --neon-2:  #c4ff4d;   /* lime — signature conservée */
+  --neon-3:  #7B61FF;   /* violet Quantum */
+  --neon-4:  #ffb347;   /* amber */
+  --neon-5:  #00FFFF;   /* cyan saturé */
 
   /* Catégories */
-  --cat-drink: #ff2e9a;
-  --cat-give: #ffb347;
-  --cat-role: #f5d67a;
-  --cat-action: #8b5cff;
-  --cat-water: #5aeaff;
+  --cat-drink:   #FF00FF;
+  --cat-give:    #ffb347;
+  --cat-role:    #f5d67a;
+  --cat-action:  #7B61FF;
+  --cat-water:   #00FFFF;
   --cat-special: #c4ff4d;
-  --cat-party: #ff6e6e;
-  --cat-target: #ff9ec3;
+  --cat-party:   #ff6e6e;
+  --cat-target:  #ff9ec3;
 
   --radius: 16px;
   --radius-lg: 28px;
   --radius-sm: 8px;
 
-  --shadow-sm: 0 2px 0 rgba(0,0,0,0.4);
-  --shadow-neon: 0 0 0 2px rgba(255,46,154,0.3), 0 8px 32px rgba(255,46,154,0.35);
-  --shadow-card: 0 20px 60px rgba(0,0,0,0.55), 0 2px 0 rgba(255,255,255,0.06) inset;
+  --shadow-sm:   0 2px 0 rgba(0,0,0,0.5);
+  --shadow-neon: 0 0 0 2px rgba(255,0,255,0.4), 0 8px 32px rgba(255,0,255,0.45);
+  --shadow-card: 0 20px 60px rgba(0,0,0,0.65), 0 2px 0 rgba(224,224,255,0.06) inset;
 
   --font-display: 'Fraunces', 'Times New Roman', serif;
   --font-body: 'Space Grotesk', system-ui, sans-serif;
@@ -49,7 +49,7 @@ html, body, #root {
 
 body {
   font-family: var(--font-body);
-  background: radial-gradient(ellipse at 30% 10%, #2a0f4a 0%, var(--ink) 55%) fixed;
+  background: radial-gradient(ellipse at 30% 10%, #1a0f3a 0%, var(--ink) 55%) fixed;
   color: var(--paper);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;

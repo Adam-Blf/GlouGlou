@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GlouGlou · Preview Cyber Rave</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,600&family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:        #050510;
+  --ink-2:      #0d0820;
+  --ink-3:      #1a0f3a;
+  --paper:      #E0E0FF;
+  --paper-dim:  #b8b8e0;
+  --line:        rgba(224,224,255,0.14);
+  --line-strong: rgba(224,224,255,0.32);
+
+  --neon:    #FF00FF;
+  --neon-2:  #c4ff4d;
+  --neon-3:  #7B61FF;
+  --neon-4:  #ffb347;
+  --neon-5:  #00FFFF;
+
+  --cat-drink:   #FF00FF;
+  --cat-give:    #ffb347;
+  --cat-role:    #f5d67a;
+  --cat-action:  #7B61FF;
+  --cat-water:   #00FFFF;
+  --cat-special: #c4ff4d;
+  --cat-party:   #ff6e6e;
+  --cat-target:  #ff9ec3;
+
+  --radius: 16px;
+  --radius-lg: 28px;
+  --shadow-neon: 0 0 0 2px rgba(255,0,255,0.4), 0 8px 32px rgba(255,0,255,0.45);
+  --shadow-card: 0 20px 60px rgba(0,0,0,0.65), 0 2px 0 rgba(224,224,255,0.06) inset;
+
+  --font-display: 'Fraunces', serif;
+  --font-body:    'Space Grotesk', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: radial-gradient(ellipse at 30% 10%, #1a0f3a 0%, var(--ink) 55%) fixed;
+  color: var(--paper);
+  min-height: 100vh;
+  padding: 32px 20px 80px;
+}
+.bg-blobs {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  filter: blur(80px); opacity: 0.45;
+}
+.bg-blobs::before, .bg-blobs::after {
+  content: ""; position: absolute;
+  width: 40vmax; height: 40vmax; border-radius: 50%;
+  animation: floatBlob 22s ease-in-out infinite;
+}
+.bg-blobs::before { background: var(--neon); top: -10vmax; left: -10vmax; }
+.bg-blobs::after  { background: var(--neon-3); bottom: -10vmax; right: -10vmax; animation-delay: -11s; }
+@keyframes floatBlob {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50% { transform: translate(4vmax, 4vmax) scale(1.15); }
+}
+
+.wrap {
+  position: relative; z-index: 1;
+  max-width: 1100px; margin: 0 auto;
+  display: grid; gap: 40px;
+}
+header h1 {
+  font-family: var(--font-display); font-style: italic; font-weight: 600;
+  font-size: clamp(36px, 6vw, 64px); margin: 0;
+  background: linear-gradient(180deg, #fff 0%, var(--neon) 60%, var(--neon-3) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  letter-spacing: -0.03em;
+}
+header p { color: var(--paper-dim); margin: 8px 0 0; font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+
+section h2 {
+  font-family: var(--font-display); font-style: italic; font-weight: 600;
+  font-size: 24px; margin: 0 0 16px; color: var(--paper);
+}
+
+/* Swatches */
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.swatch {
+  border-radius: var(--radius);
+  padding: 18px 14px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.swatch .chip {
+  height: 80px; border-radius: 12px;
+  box-shadow: 0 0 24px currentColor, inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+.swatch .name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--paper-dim); }
+.swatch .hex  { font-family: var(--font-mono); font-size: 13px; color: var(--paper); }
+.swatch .role { font-family: var(--font-body); font-size: 12px; color: var(--paper-dim); font-style: italic; }
+
+/* End-screen preview */
+.endscreen {
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--ink-2), var(--ink));
+  border: 1px solid var(--line);
+  padding: 32px 24px;
+  box-shadow: var(--shadow-card);
+  max-width: 420px; margin: 0 auto;
+}
+.endscreen h3 {
+  font-family: var(--font-display); font-style: italic; font-weight: 600;
+  font-size: 40px; line-height: 1; margin: 0 0 6px; text-align: center;
+  color: var(--neon-2); text-shadow: 0 0 28px var(--neon-2);
+}
+.endscreen .sub { text-align: center; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 24px; }
+.row {
+  display: grid; grid-template-columns: 28px 36px 1fr auto; gap: 12px; align-items: center;
+  padding: 10px 12px; border-radius: 12px; background: rgba(224,224,255,0.04); border: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+.row.first { background: linear-gradient(90deg, rgba(255,0,255,0.18), rgba(123,97,255,0.18)); border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon) inset, 0 0 24px rgba(255,0,255,0.25); }
+.rank { font-family: var(--font-display); font-style: italic; font-size: 22px; text-align: center; }
+.row.first .rank { color: var(--neon-2); }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--neon), var(--neon-3)); display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; }
+.avatar.b { background: linear-gradient(135deg, var(--neon-5), var(--neon-3)); }
+.avatar.c { background: linear-gradient(135deg, var(--neon-4), var(--neon)); }
+.avatar.d { background: linear-gradient(135deg, var(--neon-2), var(--neon-5)); color: var(--ink); }
+.name-cell { font-weight: 600; color: var(--paper); }
+.gulps { font-family: var(--font-mono); font-size: 13px; color: var(--neon-2); }
+
+.cta {
+  margin-top: 20px; width: 100%;
+  padding: 14px 18px; border-radius: 14px; border: 0;
+  background: linear-gradient(90deg, var(--neon), var(--neon-3));
+  color: #fff; font-family: var(--font-body); font-weight: 700; font-size: 15px;
+  letter-spacing: 0.02em; cursor: pointer;
+  box-shadow: var(--shadow-neon);
+}
+
+/* Buttons row */
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { padding: 12px 20px; border-radius: 12px; font-weight: 600; font-family: var(--font-body); font-size: 14px; cursor: pointer; border: 1.5px solid var(--line-strong); }
+.btn.primary   { background: var(--neon);   color: #fff; border-color: var(--neon); box-shadow: 0 0 24px rgba(255,0,255,0.4); }
+.btn.success   { background: var(--neon-2); color: var(--ink); border-color: var(--neon-2); }
+.btn.ghost     { background: transparent;   color: var(--paper); }
+.btn.cyan      { background: var(--neon-5); color: var(--ink); border-color: var(--neon-5); }
+
+/* Categories pills */
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 6px 12px; border-radius: 999px; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  background: rgba(224,224,255,0.06); border: 1px solid var(--line);
+}
+.pill .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+footer { text-align: center; color: var(--paper-dim); font-family: var(--font-mono); font-size: 11px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="bg-blobs"></div>
+
+<div class="wrap">
+  <header>
+    <h1>GlouGlou · Cyber Rave</h1>
+    <p>Preview palette · Quantum #91 adapté · 18-25 mobile-first</p>
+  </header>
+
+  <section>
+    <h2>Accents néon</h2>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background: var(--neon);   color: var(--neon);"></div>   <div><div class="name">--neon</div>   <div class="hex">#FF00FF</div><div class="role">CTA primaire / boire</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--neon-2); color: var(--neon-2);"></div> <div><div class="name">--neon-2</div> <div class="hex">#C4FF4D</div><div class="role">success / score</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--neon-3); color: var(--neon-3);"></div> <div><div class="name">--neon-3</div> <div class="hex">#7B61FF</div><div class="role">action / violet</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--neon-4); color: var(--neon-4);"></div> <div><div class="name">--neon-4</div> <div class="hex">#FFB347</div><div class="role">amber / give</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--neon-5); color: var(--neon-5);"></div> <div><div class="name">--neon-5</div> <div class="hex">#00FFFF</div><div class="role">cyan / water</div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Surfaces & texte</h2>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong);"></div><div><div class="name">--ink</div><div class="hex">#050510</div><div class="role">background</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong);"></div><div><div class="name">--ink-2</div><div class="hex">#0D0820</div><div class="role">cartes</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line-strong);"></div><div><div class="name">--ink-3</div><div class="hex">#1A0F3A</div><div class="role">surfaces hautes</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--paper);"></div><div><div class="name">--paper</div><div class="hex">#E0E0FF</div><div class="role">texte principal</div></div></div>
+      <div class="swatch"><div class="chip" style="background: var(--paper-dim);"></div><div><div class="name">--paper-dim</div><div class="hex">#B8B8E0</div><div class="role">texte secondaire</div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Catégories cartes</h2>
+    <div class="pills">
+      <span class="pill"><span class="dot" style="background: var(--cat-drink)"></span>Boire</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-give)"></span>Donner</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-role)"></span>Rôle</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-action)"></span>Action</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-water)"></span>Eau</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-special)"></span>Spécial</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-party)"></span>Party</span>
+      <span class="pill"><span class="dot" style="background: var(--cat-target)"></span>Cible</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Boutons</h2>
+    <div class="buttons">
+      <button class="btn primary">Lancer la partie</button>
+      <button class="btn success">Valider</button>
+      <button class="btn cyan">Skip</button>
+      <button class="btn ghost">Annuler</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Aperçu écran "Soirée terminée"</h2>
+    <div class="endscreen">
+      <h3>Soirée terminée</h3>
+      <div class="sub">Classement final</div>
+      <div class="row first">
+        <div class="rank">1</div>
+        <div class="avatar">A</div>
+        <div class="name-cell">Adam</div>
+        <div class="gulps">42 gorgées</div>
+      </div>
+      <div class="row">
+        <div class="rank">2</div>
+        <div class="avatar b">M</div>
+        <div class="name-cell">Maya</div>
+        <div class="gulps">36 gorgées</div>
+      </div>
+      <div class="row">
+        <div class="rank">3</div>
+        <div class="avatar c">L</div>
+        <div class="name-cell">Léo</div>
+        <div class="gulps">28 gorgées</div>
+      </div>
+      <div class="row">
+        <div class="rank">4</div>
+        <div class="avatar d">S</div>
+        <div class="name-cell">Sami</div>
+        <div class="gulps">19 gorgées</div>
+      </div>
+      <button class="cta">Partager sur Insta</button>
+    </div>
+  </section>
+
+  <footer>Preview only · ne touche pas styles.css · ferme l'onglet une fois validé</footer>
+</div>
+</body>
+</html>

@@ -30,6 +30,18 @@ function useTweaks() {
 function replaceOrAdd(rs, role, playerId) {
   return [...rs.filter((r) => r.role !== role), { role, playerId }];
 }
+function isJokerUsable(caseNum, player) {
+  if (!player || (player.jokers || 0) <= 0) return false;
+  const c = window.CASES && window.CASES[caseNum];
+  if (!c) return false;
+  if (c.cat === "drink") return true;
+  if ([8, 16, 31, 43].includes(caseNum)) return true;
+  if ([5, 23].includes(caseNum)) return true;
+  if ([19, 44].includes(caseNum) && player.gender === "homme") return true;
+  if ([29, 46].includes(caseNum) && player.gender === "femme") return true;
+  return false;
+}
+
 function categoryLabel(cat) {
   return ({
     drink: "BOIRE", give: "DONNER / PRENDRE", role: "RÔLE", action: "ACTION",
@@ -66,6 +78,7 @@ function App() {
   // Multiplayer mode
   const [mpMode, setMpMode] = useState("off");        // "off" | "host" | "guest"
   const [pendingJoinCode, setPendingJoinCode] = useState(null);
+  const [addLocalIdx, setAddLocalIdx] = useState(null);
 
   // Local UI state (not replicated)
   const [screen, setScreen] = useState("home");       // home | hostSetup | pickChar | lobby | rules | game | end
@@ -211,6 +224,7 @@ function App() {
       case "startGame":       startGame(); break;
       case "rollDice":        rollDice(args?.playerId); break;
       case "closeModal":      closeModalAndNext(); break;
+      case "useJoker":        handleUseJoker(args?.playerId); break;
       case "pickCupidon":     onCupidChoose(args.partnerId); break;
       case "giveSips":        onGiveDone(args.dist); break;
       default: break;
@@ -227,6 +241,26 @@ function App() {
     setPlayers([{ ...me, isHost: true }]);
     saveSession({ role: "host", code, id: meIdRef.current, name: me.name, characterId: me.characterId, gender: me.gender });
     setScreen("hostSetup");
+  }
+
+  function createSoloRoom() {
+    window.SFX?.unlock();
+    setMpMode("off");
+    setRoomCode(null);
+    setMe((m) => ({ ...m, isHost: true }));
+    setPlayers([]);
+    setAddLocalIdx(null);
+    clearSession();
+    setScreen("pickChar");
+  }
+
+  function addLocalPlayer() {
+    setAddLocalIdx(players.length);
+    setScreen("pickChar");
+  }
+
+  function removeLocalPlayer(id) {
+    setPlayers((ps) => ps.filter((p) => p.id !== id));
   }
 
   function onHostSetupConfirm(cfg) {
@@ -258,9 +292,18 @@ function App() {
   }
 
   function onConfirmChar({ characterId, gender, name }) {
+    if (mpMode === "off" && addLocalIdx !== null) {
+      const newP = { id: uid(), name, characterId, gender, position: 0, jokers: 0, isHost: false };
+      setPlayers((ps) => [...ps, newP]);
+      setAddLocalIdx(null);
+      setScreen("lobby");
+      return;
+    }
     const updated = { ...me, characterId, gender, name };
     setMe(updated);
-    saveSession({ role: mpMode === "host" ? "host" : "guest", code: roomCode, id: meIdRef.current, name, characterId, gender });
+    if (mpMode !== "off") {
+      saveSession({ role: mpMode === "host" ? "host" : "guest", code: roomCode, id: meIdRef.current, name, characterId, gender });
+    }
     if (mpMode === "guest") {
       mp.sendToHost({ type: "join", me: { id: meIdRef.current, name, characterId, gender } });
     } else {
@@ -394,6 +437,12 @@ function App() {
     if (caseNum === 16) addSips(playerId, 6);
     if (caseNum === 31 || caseNum === 43) addSips(playerId, 5);
 
+    const autoTargetSips = { 5: 2, 17: 2, 19: 2, 23: 2, 29: 2, 35: 2, 44: 3, 46: 3 };
+    if (autoTargetSips[caseNum]) {
+      const t = computeTargets(caseNum, players, playerId);
+      if (t && t.list) t.list.forEach((p) => addSips(p.id, autoTargetSips[caseNum]));
+    }
+
     if (caseNum === 4) { setCupidonOpen({ playerId }); return; }
     if ([7, 15, 30, 49].includes(caseNum)) {
       const others = players.filter((p) => p.id !== playerId);
@@ -442,11 +491,22 @@ function App() {
         if (target === 57) target = 58;
         movePlayer(victim.id, target);
         showToast(`${victim.name} téléporté(e) case ${target} !`);
+        setTimeout(() => triggerCase(victim.id, target), 500);
+      } else {
+        nextTurn();
       }
-      nextTurn();
       return;
     }
     if (caseNum === 60) return;
+    nextTurn();
+  }
+
+  function handleUseJoker(playerId) {
+    const target = players.find((p) => p.id === playerId);
+    if (!target || (target.jokers || 0) <= 0) return;
+    setPlayers((ps) => ps.map((p) => p.id === playerId ? { ...p, jokers: Math.max(0, (p.jokers || 0) - 1) } : p));
+    showToast("🃏 Joker utilisé · effet esquivé");
+    setActiveCaseModal(null);
     nextTurn();
   }
 
@@ -485,7 +545,7 @@ function App() {
   const currentPlayer = players[turnIdx];
   const currentChar = currentPlayer && window.CHARACTERS.find((c) => c.id === currentPlayer.characterId);
   const amCurrent = currentPlayer?.id === meIdRef.current;
-  const canAct = mpMode !== "guest" ? true : amCurrent;
+  const canAct = mpMode === "off" ? true : amCurrent;
 
   // ---- Render ----------------------------------------------------
   return (
@@ -494,22 +554,30 @@ function App() {
       <div className="bg-blobs" />
 
       {screen === "home" && (
-        <HomeScreen onCreate={createRoom} onJoin={joinRoom} onResume={resumeSession} savedSession={savedSession} />
+        <HomeScreen onCreate={createRoom} onCreateSolo={createSoloRoom} onJoin={joinRoom} onResume={resumeSession} savedSession={savedSession} />
       )}
       {screen === "hostSetup" && (
         <HostSetupScreen onConfirm={onHostSetupConfirm} onBack={() => { leaveRoom(); }} />
       )}
       {screen === "pickChar" && (
-        <CharacterPickScreen me={me} players={players}
+        <CharacterPickScreen
+          me={addLocalIdx !== null ? { id: `local-slot-${addLocalIdx}`, name: `Joueur ${addLocalIdx + 1}`, characterId: null, gender: null } : me}
+          players={players}
           onConfirm={onConfirmChar}
-          onBack={() => setScreen(roomCode ? "lobby" : "home")} />
+          onBack={() => {
+            setAddLocalIdx(null);
+            const hasLobby = (mpMode !== "off" && roomCode) || (mpMode === "off" && players.length > 0);
+            setScreen(hasLobby ? "lobby" : "home");
+          }} />
       )}
       {screen === "lobby" && (
         <LobbyScreen roomCode={roomCode} players={players} me={me}
           mpStatus={mp.status} mpMode={mpMode}
           onLeave={leaveRoom}
           onStart={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "startGame" } }); else startGame(); }}
-          onEditMe={() => setScreen("pickChar")} />
+          onEditMe={() => setScreen("pickChar")}
+          onAddLocal={mpMode === "off" ? addLocalPlayer : null}
+          onRemoveLocal={mpMode === "off" ? removeLocalPlayer : null} />
       )}
       {screen === "rules" && <RulesScreen onDone={rulesDone} />}
       {screen === "end" && (
@@ -545,7 +613,7 @@ function App() {
               <Dice value={dice} rolling={rolling}
                 onRoll={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "rollDice", args: { playerId: currentPlayer?.id } } }); else rollDice(); }}
                 disabled={!canAct || !!activeCaseModal || !!winner}
-                cta={!canAct ? `${currentPlayer?.name || "…"} joue…` : "Lancer le dé"} />
+                cta={!canAct ? `${currentPlayer?.name || "…"} joue…` : (mpMode === "off" ? `À ${currentPlayer?.name || "?"} de lancer` : "Lancer le dé")} />
             </div>
 
             <div className="panel">
@@ -590,16 +658,18 @@ function App() {
 
       {shotSplash && <ShotSplash label={shotSplash.label} onDone={() => { if (mpMode !== "guest") setShotSplash(null); }} />}
 
-      {cupidonOpen && cupidonOpen.playerId === meIdRef.current && (
+      {cupidonOpen && (mpMode === "off" || cupidonOpen.playerId === meIdRef.current) && (
         <CupidonModal me={players.find((p) => p.id === cupidonOpen.playerId)}
           others={players.filter((p) => p.id !== cupidonOpen.playerId)}
           onChoose={(partnerId) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId } } }); else onCupidChoose(partnerId); }}
-          onCancel={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId: null } } }); else { setCupidonOpen(null); nextTurn(); } }} />
+          onCancel={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "pickCupidon", args: { partnerId: null } } }); else { setCupidonOpen(null); nextTurn(); } }}
+          onHome={() => { setCupidonOpen(null); leaveRoom(); }} />
       )}
 
-      {giveModal && giveModal.playerId === meIdRef.current && (
+      {giveModal && (mpMode === "off" || giveModal.playerId === meIdRef.current) && (
         <GiveSipsModal total={giveModal.total} others={giveModal.others}
-          onDone={(dist) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "giveSips", args: { dist } } }); else onGiveDone(dist); }} />
+          onDone={(dist) => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "giveSips", args: { dist } } }); else onGiveDone(dist); }}
+          onHome={() => { setGiveModal(null); leaveRoom(); }} />
       )}
 
       {pauseOpen && (
@@ -608,15 +678,22 @@ function App() {
           onRules={() => { setPauseOpen(false); setScreen("rules"); }} />
       )}
 
-      {activeCaseModal && (
-        <CaseModal caseData={window.CASES[activeCaseModal.caseNum]}
-          player={players.find((p) => p.id === activeCaseModal.playerId)}
-          allPlayers={players}
-          targets={computeTargets(activeCaseModal.caseNum, players, activeCaseModal.playerId)}
-          onClose={() => { if (mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
-          isWin={activeCaseModal.caseNum === 60}
-          readOnly={mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current} />
-      )}
+      {activeCaseModal && (() => {
+        const modalPlayer = players.find((p) => p.id === activeCaseModal.playerId);
+        const canJoker = isJokerUsable(activeCaseModal.caseNum, modalPlayer);
+        return (
+          <CaseModal caseData={window.CASES[activeCaseModal.caseNum]}
+            player={modalPlayer}
+            allPlayers={players}
+            targets={computeTargets(activeCaseModal.caseNum, players, activeCaseModal.playerId)}
+            onClose={() => { if (mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current) return; if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "closeModal" } }); else closeModalAndNext(); }}
+            canUseJoker={canJoker}
+            jokersAvailable={modalPlayer?.jokers || 0}
+            onUseJoker={() => { if (mpMode === "guest") mp.sendToHost({ type: "action", action: { type: "useJoker", args: { playerId: activeCaseModal.playerId } } }); else handleUseJoker(activeCaseModal.playerId); }}
+            isWin={activeCaseModal.caseNum === 60}
+            readOnly={mpMode === "guest" && activeCaseModal.playerId !== meIdRef.current} />
+        );
+      })()}
 
       {inspectCase != null && !activeCaseModal && (
         <CaseModal caseData={window.CASES[inspectCase]} onClose={() => setInspectCase(null)} inspectOnly />
@@ -632,7 +709,7 @@ function App() {
   );
 }
 
-function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, inspectOnly, readOnly }) {
+function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, inspectOnly, readOnly, canUseJoker, jokersAvailable, onUseJoker }) {
   if (!caseData) return null;
   const c = caseData;
   const character = player && window.CHARACTERS.find((x) => x.id === player.characterId);
@@ -689,9 +766,16 @@ function CaseModal({ caseData, player, allPlayers, targets, onClose, isWin, insp
           ) : readOnly ? (
             <div className="mono muted">En attente du joueur…</div>
           ) : (
-            <button className="btn btn-primary" onClick={onClose}>
-              {isWin ? "Célébrer 🎉" : "C'est bon, au suivant"}
-            </button>
+            <>
+              {canUseJoker && onUseJoker && !isWin && (
+                <button className="btn btn-ghost" onClick={onUseJoker}>
+                  🃏 Utiliser joker ({jokersAvailable})
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={onClose}>
+                {isWin ? "Célébrer 🎉" : "C'est bon, au suivant"}
+              </button>
+            </>
           )}
         </div>
       </div>

@@ -136,7 +136,7 @@ function TurnIntro({ player, character, onGo }) {
 }
 
 // ---------- Cupidon: choose partner ----------
-function CupidonModal({ me, others, onChoose, onCancel }) {
+function CupidonModal({ me, others, onChoose, onCancel, onHome }) {
   return (
     <div className="backdrop">
       <div className="modal" style={{ maxWidth: 520 }}>
@@ -163,6 +163,7 @@ function CupidonModal({ me, others, onChoose, onCancel }) {
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel}>Plus tard</button>
+          {onHome && <button className="btn btn-ghost" onClick={onHome}>🏠 Accueil</button>}
         </div>
       </div>
     </div>
@@ -170,7 +171,7 @@ function CupidonModal({ me, others, onChoose, onCancel }) {
 }
 
 // ---------- Give sips modal ----------
-function GiveSipsModal({ total, others, onDone }) {
+function GiveSipsModal({ total, others, onDone, onHome }) {
   const [dist, setDist] = useS2(() => Object.fromEntries(others.map(o => [o.id, 0])));
   const given = Object.values(dist).reduce((a, b) => a + b, 0);
   const remaining = total - given;
@@ -218,6 +219,7 @@ function GiveSipsModal({ total, others, onDone }) {
           <button className="btn btn-primary" disabled={remaining !== 0} onClick={() => onDone(dist)}>
             {remaining === 0 ? "Valider" : `Encore ${remaining} à répartir`}
           </button>
+          {onHome && <button className="btn btn-ghost" onClick={onHome}>🏠 Accueil</button>}
         </div>
       </div>
     </div>
