@@ -15,6 +15,29 @@ Le jeu de l'oie version apéro · 60 cases, 16 personnages, dé animé, système
 
 **Live** · https://glouglou-mu.vercel.app
 
+## Architecture
+
+```mermaid
+flowchart TB
+    A["index.html<br/>chargement React UMD · Babel Standalone"]
+    B["data/cases.js<br/>60 cases · categories · icones"]
+    C["data/characters.js<br/>16 archetypes d'alcool"]
+    D["components/app.jsx<br/>orchestration · logique de partie"]
+    E["components/board.jsx<br/>plateau serpentin 6x10"]
+    F["components/screens.jsx<br/>Home · Lobby · CharacterPick"]
+    G["components/ui.jsx<br/>Dice · Avatar · Toast · Confetti"]
+    H["components/net.jsx<br/>multijoueur P2P PeerJS · hote autoritatif"]
+    I["sw.js + manifest.json<br/>Service Worker · PWA offline"]
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    D --> F
+    D --> G
+    D --> H
+    A --> I
+```
+
 ## Stack
 
 - HTML + CSS pur (design system custom, palette néon)
