@@ -11,23 +11,23 @@
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
 ![Vercel](https://img.shields.io/badge/deploy-Vercel-000?logo=vercel&logoColor=white)
 
-Le jeu de l'oie version apéro · 60 cases, 16 personnages, dé animé, système de code pour rejoindre une partie, installable en PWA.
+Le jeu de l'oie version apéro - 60 cases, 16 personnages, dé animé, système de code pour rejoindre une partie, installable en PWA.
 
-**Live** · https://glouglou-mu.vercel.app
+**Live** - https://glouglou-mu.vercel.app
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    A["index.html<br/>chargement React UMD · Babel Standalone"]
-    B["data/cases.js<br/>60 cases · categories · icones"]
+    A["index.html<br/>chargement React UMD - Babel Standalone"]
+    B["data/cases.js<br/>60 cases - categories - icones"]
     C["data/characters.js<br/>16 archetypes d'alcool"]
-    D["components/app.jsx<br/>orchestration · logique de partie"]
+    D["components/app.jsx<br/>orchestration - logique de partie"]
     E["components/board.jsx<br/>plateau serpentin 6x10"]
-    F["components/screens.jsx<br/>Home · Lobby · CharacterPick"]
-    G["components/ui.jsx<br/>Dice · Avatar · Toast · Confetti"]
-    H["components/net.jsx<br/>multijoueur P2P PeerJS · hote autoritatif"]
-    I["sw.js + manifest.json<br/>Service Worker · PWA offline"]
+    F["components/screens.jsx<br/>Home - Lobby - CharacterPick"]
+    G["components/ui.jsx<br/>Dice - Avatar - Toast - Confetti"]
+    H["components/net.jsx<br/>multijoueur P2P PeerJS - hote autoritatif"]
+    I["sw.js + manifest.json<br/>Service Worker - PWA offline"]
     A --> D
     B --> D
     C --> D
@@ -43,7 +43,7 @@ flowchart TB
 - HTML + CSS pur (design system custom, palette néon)
 - React 18 via UMD + Babel Standalone (compilation JSX dans le navigateur)
 - Service Worker pour le fonctionnement offline
-- Manifest PWA · installable iOS / Android / desktop
+- Manifest PWA - installable iOS / Android / desktop
 
 ## Lancer en local
 
@@ -56,7 +56,7 @@ npm run dev
 
 ## Déploiement
 
-Déployé sur Vercel en tant que site statique · aucun build, tout est servi tel quel.
+Déployé sur Vercel en tant que site statique - aucun build, tout est servi tel quel.
 
 ```bash
 vercel --prod
@@ -85,15 +85,15 @@ components/
 ## Gameplay
 
 - Chaque case appartient à une catégorie (boire, donner, rôle, action, répit, spécial, tournée, ciblé).
-- Cases spéciales chaînées · 39 → 33, 50 → -1, 53 → -3, 56 → téléport avant, 57 → téléport joueur.
-- Rôles persistants · Roi des questions, Reine, Valet des pouces.
+- Cases spéciales chaînées - 39 → 33, 50 → -1, 53 → -3, 56 → téléport avant, 57 → téléport joueur.
+- Rôles persistants - Roi des questions, Reine, Valet des pouces.
 - Les bots jouent automatiquement pour tester le flow complet.
 
 ## Multijoueur
 
-- P2P via [PeerJS](https://peerjs.com) · broker public, aucun backend requis.
+- P2P via [PeerJS](https://peerjs.com) - broker public, aucun backend requis.
 - L'hôte crée la partie et obtient un code à 6 caractères. Les joueurs tapent ce code pour rejoindre.
-- L'hôte est autoritatif · il applique les actions (dé, cases, modals) et re-broadcaste l'état complet à tous.
+- L'hôte est autoritatif - il applique les actions (dé, cases, modals) et re-broadcaste l'état complet à tous.
 - Les guests envoient des actions RPC (`rollDice`, `closeModal`, `pickCupidon`, `giveSips`).
 - Chacun ne peut agir que sur son propre tour / ses propres modals.
 
@@ -110,7 +110,7 @@ components/
 ---
 
 <p align="center">
-  <sub>Par <a href="https://adam.beloucif.com">Adam Beloucif</a> · Data Engineer & Fullstack Developer · <a href="https://github.com/Adam-Blf">GitHub</a> · <a href="https://www.linkedin.com/in/adambeloucif/">LinkedIn</a></sub>
+  <sub>Par <a href="https://adam.beloucif.com">Adam Beloucif</a> - Data Engineer & Fullstack Developer - <a href="https://github.com/Adam-Blf">GitHub</a> - <a href="https://www.linkedin.com/in/adambeloucif/">LinkedIn</a></sub>
 </p>
 
 
