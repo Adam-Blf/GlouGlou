@@ -6,7 +6,6 @@
 [![commits](https://img.shields.io/github/commit-activity/t/Adam-Blf/GlouGlou?color=001329&label=commits&style=flat-square)](https://github.com/Adam-Blf/GlouGlou/commits) [![visites](https://hits.sh/github.com/Adam-Blf/GlouGlou.svg?style=flat-square&label=visites&color=001329)](https://hits.sh/github.com/Adam-Blf/GlouGlou/) [![last commit](https://img.shields.io/github/last-commit/Adam-Blf/GlouGlou?color=D4A437&style=flat-square&label=dernier%20push)](https://github.com/Adam-Blf/GlouGlou/commits) [![top language](https://img.shields.io/github/languages/top/Adam-Blf/GlouGlou?style=flat-square)](https://github.com/Adam-Blf/GlouGlou) [![license](https://img.shields.io/github/license/Adam-Blf/GlouGlou?style=flat-square&color=D4A437)](LICENSE)
 <!-- adam-badges:end -->
 
-
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
 ![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
@@ -115,13 +114,6 @@ components/
   <sub>Par <a href="https://adam.beloucif.com">Adam Beloucif</a> - Data Engineer & Fullstack Developer - <a href="https://github.com/Adam-Blf">GitHub</a> - <a href="https://www.linkedin.com/in/adambeloucif/">LinkedIn</a></sub>
 </p>
 
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=Adam-Blf%2FGlouGlou&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Adam-Blf/GlouGlou&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Adam-Blf/GlouGlou&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Adam-Blf/GlouGlou&type=date&legend=top-left" />
  </picture>
 </a>
