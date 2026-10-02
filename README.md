@@ -37,6 +37,13 @@ flowchart TB
     D --> G
     D --> H
     A --> I
+
+    classDef c0 fill:#2563eb,stroke:#1e3a8a,stroke-width:2px,color:#ffffff
+    classDef c1 fill:#7c3aed,stroke:#4c1d95,stroke-width:2px,color:#ffffff
+    classDef c2 fill:#0891b2,stroke:#164e63,stroke-width:2px,color:#ffffff
+    class A,B,C c0
+    class D,I c1
+    class E,F,G,H c2
 ```
 
 ## Stack
